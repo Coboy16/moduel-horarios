@@ -1,5 +1,3 @@
-// src/components/layout/Sidebar.tsx (Versión Simplificada con <Link>)
-
 import { Link, useLocation } from "react-router-dom";
 import { RxDashboard } from "react-icons/rx";
 import { SlCalender } from "react-icons/sl";
