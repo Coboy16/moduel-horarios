@@ -31,7 +31,6 @@ import AddPermissionModal from "./modals/AddPermissionModal";
 import AddScheduleModal from "./modals/AddScheduleModal";
 import ContextMenu from "./context-menu/ContextMenu";
 import FloatingTimeApprovalPanel from "./floating-time/FloatingTimeApprovalPanel";
-import DraggableItemPanel from "./sidebar/DraggableItemPanel"; // NUEVO
 import EventItem from "./calendar/EventItem"; // Para DragOverlay
 import TimelineEventItem from "./calendar/TimelineEventItem"; // Para DragOverlay
 import {
@@ -486,7 +485,6 @@ export default function EmployeeScheduler() {
               {/* Contenedor del calendario */}
               <SchedulerCalendar />
             </div>
-            <DraggableItemPanel /> {/* Panel lateral para arrastrar items */}
           </div>
         </div>
       </div>

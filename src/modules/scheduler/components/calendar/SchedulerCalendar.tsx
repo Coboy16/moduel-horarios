@@ -69,9 +69,6 @@ export default function SchedulerCalendar() {
     };
   }, []);
 
-  // Eliminamos el useEffect que causaba el bucle
-  // Ahora manejamos el cambio de vista solo desde el FilterBar cuando se selecciona un rango
-
   // Ajustar el cálculo de la fecha de inicio/fin de semana
   const getWeekRange = (date: Date): { start: Date; end: Date } => {
     const start = startOfWeek(date, { weekStartsOn: 1 }); // Lunes como inicio de semana
@@ -175,6 +172,20 @@ export default function SchedulerCalendar() {
     setDateRange(newStart, newEnd);
   };
 
+  // Determinar el texto del botón según la vista actual
+  const getTodayButtonText = () => {
+    switch (currentView) {
+      case "month":
+        return "Mes actual";
+      case "week":
+        return "Semana actual";
+      case "timeline":
+        return "Día actual";
+      default:
+        return "Hoy";
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* --- Header --- */}
@@ -193,7 +204,7 @@ export default function SchedulerCalendar() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button variant="outline" size="sm" onClick={navigateToday}>
-            Mes actual
+            {getTodayButtonText()}
           </Button>
           <Button
             variant="ghost"

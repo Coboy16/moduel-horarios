@@ -82,7 +82,7 @@ export default function FilterBar() {
           </Popover>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -101,7 +101,7 @@ export default function FilterBar() {
             <X className="h-4 w-4 mr-1" />
             Limpiar filtros
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {showFilters && (
