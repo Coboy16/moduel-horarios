@@ -9,16 +9,17 @@ import type {
   DraggableWorkedTimeData,
   DraggableResizeHandleData,
 } from "../../interfaces/DndData";
+import { cn } from "../../lib/utils"; // Importar cn
 
 interface WorkedTimeBarProps {
   entradaMarking: Marking;
   salidaMarking: Marking | null;
   regularMinutes: number;
   overtimeMinutes: number;
-  barStyle: React.CSSProperties; // Incluye top, left, height, width total
+  barStyle: React.CSSProperties;
   hourWidth: number;
-  employeeId: string; // Necesario para el ID único de los draggables
-  currentDateISO: string; // Para asegurar IDs únicos por día
+  employeeId: string;
+  currentDateISO: string;
 }
 
 export default function WorkedTimeBar({
@@ -32,23 +33,23 @@ export default function WorkedTimeBar({
   currentDateISO,
 }: WorkedTimeBarProps) {
   const hasSalida = salidaMarking !== null;
-  const uniquePrefix = `wt-${currentDateISO}-${employeeId}`; // Prefijo único por barra/día/empleado
+  const uniquePrefix = `wt-${currentDateISO}-${employeeId}-${entradaMarking.id}`;
 
   // --- Draggable Principal de la Barra ---
-  const draggableData: DraggableWorkedTimeData = {
+  const draggableBarData: DraggableWorkedTimeData = {
     type: "workedTime",
     entradaMarkingId: entradaMarking.id,
     salidaMarkingId: salidaMarking?.id ?? null,
   };
   const {
     attributes: barAttributes,
-    listeners: barListeners,
+    listeners: barListeners, // Estos listeners deben poder activarse
     setNodeRef: setBarNodeRef,
     transform: barTransform,
     isDragging: isBarDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-bar`, // ID único
-    data: draggableData,
+    id: `${uniquePrefix}-bar`,
+    data: draggableBarData,
   });
 
   // --- Draggable para Resize Izquierdo (Entrada) ---
@@ -61,15 +62,15 @@ export default function WorkedTimeBar({
   };
   const {
     attributes: leftAttributes,
-    listeners: leftListeners,
+    listeners: leftListeners, // Estos listeners deben poder activarse
     setNodeRef: setLeftHandleRef,
     isDragging: isLeftDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-left`, // ID único
+    id: `${uniquePrefix}-resize-left`,
     data: resizeLeftData,
   });
 
-  // --- Draggable para Resize Derecho (Salida) ---
+  // --- Draggable para Resize Derecho (Salida) - Condicional ---
   const resizeRightData: DraggableResizeHandleData | null = salidaMarking
     ? {
         type: "resizeHandle",
@@ -82,98 +83,151 @@ export default function WorkedTimeBar({
 
   const {
     attributes: rightAttributes,
-    listeners: rightListeners,
+    listeners: rightListeners, // Estos listeners deben poder activarse
     setNodeRef: setRightHandleRef,
     isDragging: isRightDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-right`, // ID único
-    data: resizeRightData ?? undefined,
+    id: `${uniquePrefix}-resize-right`,
+    data: resizeRightData,
     disabled: !hasSalida,
   });
 
   // Estilo combinado para la barra principal
   const combinedBarStyle: React.CSSProperties = {
-    ...barStyle, // Recibe left, top, height, width total
+    ...barStyle,
     transform: isBarDragging ? CSS.Translate.toString(barTransform) : undefined,
     opacity: isBarDragging || isLeftDragging || isRightDragging ? 0.7 : 1,
-    cursor: isBarDragging ? "grabbing" : "grab",
-    zIndex: isBarDragging || isLeftDragging || isRightDragging ? 1000 : 10,
+    cursor: isBarDragging
+      ? "grabbing"
+      : isLeftDragging || isRightDragging
+      ? "ew-resize"
+      : "grab", // Cambiar cursor también al redimensionar
+    zIndex:
+      isBarDragging || isLeftDragging || isRightDragging
+        ? 1000
+        : barStyle.zIndex ?? 10,
     position: "absolute",
     display: "flex",
-    pointerEvents: "auto", // Permitir interacciones con la barra y handles
+    borderRadius: "4px",
+    overflow: "hidden",
+    pointerEvents: "auto", // Asegurar que la barra reciba eventos
   };
 
   const regularWidth = (regularMinutes / 60) * hourWidth;
   const overtimeWidth = (overtimeMinutes / 60) * hourWidth;
 
-  // Prevenir propagación para no activar context menu de la fila
-  const stopPropagation = (e: React.MouseEvent | React.TouchEvent) => {
+  // Función para detener la propagación de eventos específicos (NO POINTER DOWN)
+  const stopSpecificPropagation = (e: React.MouseEvent | React.TouchEvent) => {
+    console.log(`[WorkedTimeBar] Event ${e.type} stopped propagation`);
     e.stopPropagation();
   };
 
+  // Wrapper para los listeners de los handles para añadir logging
+  const logHandleListeners = (
+    handleName: string,
+    listeners: ReturnType<typeof useDraggable>["listeners"]
+  ) => {
+    if (!listeners) return {};
+    return Object.entries(listeners).reduce((acc, [eventName, handler]) => {
+      acc[eventName as keyof typeof listeners] = (event: any) => {
+        console.log(`[Handle ${handleName}] Event: ${eventName}`);
+        // Detener propagación aquí para los handles SÍ es seguro
+        event.stopPropagation();
+        handler(event);
+      };
+      return acc;
+    }, {} as typeof listeners);
+  };
+
+  const loggedLeftListeners = logHandleListeners("Left", leftListeners);
+  const loggedRightListeners = logHandleListeners("Right", rightListeners);
+
   return (
+    // Contenedor principal de la barra, APLICAR LISTENERS DE LA BARRA AQUÍ
     <div
       ref={setBarNodeRef}
       style={combinedBarStyle}
-      {...barAttributes}
-      {...barListeners}
-      onClick={stopPropagation}
-      onContextMenu={stopPropagation}
-      onTouchStart={stopPropagation} // También para touch
+      {...barAttributes} // Atributos para accesibilidad y D&D
+      {...barListeners} // LISTENERS PARA ARRASTRAR LA BARRA COMPLETA
+      // Quitar onPointerDown={stopPropagation} para permitir que dnd-kit lo capture
+      onClick={stopSpecificPropagation} // Detener solo click normal
+      onContextMenu={stopSpecificPropagation} // Detener context menu
+      onDoubleClick={stopSpecificPropagation} // Detener doble click
     >
-      {/* Barra Verde (Regular) */}
+      {/* Barra Verde (Regular) - SIN event handlers */}
       {regularMinutes > 0 && (
         <div
-          className="h-full rounded-l bg-green-400 opacity-90 pointer-events-none" // No necesita pointer events
+          className="h-full bg-green-400 pointer-events-none"
           style={{
             width: `${regularWidth}px`,
-            borderTopRightRadius: overtimeMinutes <= 0 ? "0.25rem" : "0",
-            borderBottomRightRadius: overtimeMinutes <= 0 ? "0.25rem" : "0",
+            borderTopLeftRadius: "4px",
+            borderBottomLeftRadius: "4px",
+            borderTopRightRadius: overtimeMinutes <= 0 ? "4px" : "0",
+            borderBottomRightRadius: overtimeMinutes <= 0 ? "4px" : "0",
           }}
           title={`Regular: ${Math.round(regularMinutes / 6) / 10}h`}
         />
       )}
 
-      {/* Barra Amarilla (Overtime) */}
+      {/* Barra Amarilla (Overtime) - SIN event handlers */}
       {overtimeMinutes > 0 && (
         <div
-          className="h-full rounded-r bg-yellow-400 opacity-90 pointer-events-none" // No necesita pointer events
-          style={{ width: `${overtimeWidth}px` }}
+          className="h-full bg-yellow-400 pointer-events-none"
+          style={{
+            width: `${overtimeWidth}px`,
+            borderTopRightRadius: "4px",
+            borderBottomRightRadius: "4px",
+            borderTopLeftRadius: regularMinutes <= 0 ? "4px" : "0",
+            borderBottomLeftRadius: regularMinutes <= 0 ? "4px" : "0",
+          }}
           title={`Overtime: ${Math.round(overtimeMinutes / 6) / 10}h`}
         />
       )}
 
+      {/* --- Handles de Redimensionamiento --- */}
+      {/* APLICAR LISTENERS DE LOS HANDLES AQUÍ */}
+
       {/* Handle Izquierdo (Entrada) */}
       <div
-        ref={setLeftHandleRef}
-        {...leftListeners}
-        {...leftAttributes}
-        className="absolute -left-1 top-0 bottom-0 w-3 cursor-ew-resize z-20 flex items-center justify-center opacity-50 hover:opacity-100" // Aumentar área y hacer visible al hover
+        ref={setLeftHandleRef} // Ref para dnd-kit
+        {...leftAttributes} // Atributos del handle
+        {...loggedLeftListeners} // LISTENERS PARA ARRASTRAR ESTE HANDLE
+        className={cn(
+          "absolute -left-1 top-1/2 -translate-y-1/2 w-3 h-4 cursor-ew-resize z-20",
+          "flex items-center justify-center opacity-60 hover:opacity-100 group"
+        )}
         style={{ touchAction: "none" }}
         aria-label="Redimensionar inicio"
-        onClick={stopPropagation} // Prevenir que el click en el handle active el drag de la barra
-        onDoubleClick={stopPropagation}
-        onContextMenu={stopPropagation}
-        onTouchStart={stopPropagation}
+        // Quitar stopPropagation de aquí, ya está en los listeners loggeados
+        // onClick={stopSpecificPropagation}
+        // onDoubleClick={stopSpecificPropagation}
+        // onContextMenu={stopSpecificPropagation}
       >
-        <GripVertical className="h-4 w-4 text-gray-700 pointer-events-none bg-gray-200 rounded-sm" />
+        <div className="bg-gray-300 group-hover:bg-gray-400 rounded-sm w-full h-full flex items-center justify-center">
+          <GripVertical className="h-3 w-3 text-gray-600 pointer-events-none" />
+        </div>
       </div>
 
       {/* Handle Derecho (Salida) - Condicional */}
       {hasSalida && (
         <div
-          ref={setRightHandleRef}
-          {...rightListeners}
-          {...rightAttributes}
-          className="absolute -right-1 top-0 bottom-0 w-3 cursor-ew-resize z-20 flex items-center justify-center opacity-50 hover:opacity-100" // Aumentar área
+          ref={setRightHandleRef} // Ref para dnd-kit
+          {...rightAttributes} // Atributos del handle
+          {...loggedRightListeners} // LISTENERS PARA ARRASTRAR ESTE HANDLE
+          className={cn(
+            "absolute -right-1 top-1/2 -translate-y-1/2 w-3 h-4 cursor-ew-resize z-20",
+            "flex items-center justify-center opacity-60 hover:opacity-100 group"
+          )}
           style={{ touchAction: "none" }}
           aria-label="Redimensionar fin"
-          onClick={stopPropagation}
-          onDoubleClick={stopPropagation}
-          onContextMenu={stopPropagation}
-          onTouchStart={stopPropagation}
+          // Quitar stopPropagation de aquí, ya está en los listeners loggeados
+          // onClick={stopSpecificPropagation}
+          // onDoubleClick={stopSpecificPropagation}
+          // onContextMenu={stopSpecificPropagation}
         >
-          <GripVertical className="h-4 w-4 text-gray-700 pointer-events-none bg-gray-200 rounded-sm" />
+          <div className="bg-gray-300 group-hover:bg-gray-400 rounded-sm w-full h-full flex items-center justify-center">
+            <GripVertical className="h-3 w-3 text-gray-600 pointer-events-none" />
+          </div>
         </div>
       )}
     </div>
