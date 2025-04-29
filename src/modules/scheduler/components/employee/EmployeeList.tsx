@@ -7,12 +7,11 @@ import { Button } from "../ui/button";
 
 import {
   Users,
-  ChevronLeft,
-  ChevronRight,
   Menu,
   Check,
   X,
   Eye,
+  Cog, // Importamos el icono Cog para "Gestionar"
 } from "lucide-react";
 import EmployeeItem from "./EmployeeItem";
 import {
@@ -26,7 +25,6 @@ import SearchFilter from "../filters/SearchFilter";
 import Pagination from "../filters/Pagination";
 
 // Número de empleados por página
-// CAMBIADO DE 5 a 10
 const ITEMS_PER_PAGE = 10;
 
 export default function EmployeeList() {
@@ -45,7 +43,7 @@ export default function EmployeeList() {
     departments: [] as string[],
     positions: [] as string[],
   });
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Extraer departamentos y posiciones únicas de los empleados para los filtros
@@ -101,10 +99,17 @@ export default function EmployeeList() {
   );
 
   // Resetear a página 1 cuando cambian los filtros
+  useEffect(() => {
+    // Si el problema persiste, la depuración en SearchFilter sigue siendo necesaria.
+    const areFiltersActive =
+      searchFilters.search.length > 0 ||
+      searchFilters.departments.length > 0 ||
+      searchFilters.positions.length > 0;
+    setCurrentPage(1);
+  }, [searchFilters]);
 
-  // Obtener los empleados para la página actual
   const paginatedEmployees = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE; // Usa ITEMS_PER_PAGE aquí también
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredEmployees.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredEmployees, currentPage]);
 
@@ -126,18 +131,26 @@ export default function EmployeeList() {
     setSearchFilters(filters);
   };
 
-  // Función para seleccionar todos los empleados filtrados
+  // Función para seleccionar los empleados de la página actual
   const handleSelectPage = () => {
-    // Asegúrate de pasar los empleados PAGINADOS a selectAllEmployees
     selectAllEmployees(paginatedEmployees);
   };
 
-  // Función para deseleccionar todos los empleados filtrados
+  // Función para deseleccionar los empleados de la página actual
   const handleDeselectPage = () => {
-    // Deseleccionar solo los empleados que están en la lista filtrada actual
     paginatedEmployees.forEach((emp) => {
       deselectEmployee(emp.id);
     });
+  };
+
+  // Función para deseleccionar TODOS los empleados (sin importar filtro/página)
+  const handleDeseectAll = () => {
+    deselectAllEmployees();
+  };
+
+  // Función para seleccionar TODOS los empleados (sin importar filtro/página)
+  const handleSelectAll = () => {
+    selectAllEmployees(employees); // Pasar la lista completa de empleados
   };
 
   // Manejar cambio de página
@@ -145,18 +158,90 @@ export default function EmployeeList() {
     setCurrentPage(page);
   };
 
+  // --- RENDERIZADO DEL ESTADO COLAPSADO ---
   if (collapsed) {
     return (
-      <div className="w-12 border-r border-border flex flex-col items-center py-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(false)}
-          className="mb-4"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <div className="flex flex-col items-center gap-2">
+      // Contenedor principal colapsado con ancho fijo
+      <div className="w-12 border-r border-border flex flex-col">
+        {/* Encabezado colapsado */}
+        <div className="flex items-center justify-between p-2">
+          {/* Lado izquierdo: Menu y Users */}
+          <div className="flex items-center gap-1">
+            {/* Dropdown de acciones (solo trigger visible) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                {/* Botón más pequeño para el estado colapsado */}
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              {/* Contenido del Dropdown (igual que en estado expandido) */}
+              <DropdownMenuContent
+                align="end"
+                className="w-56 bg-white border-gray-200 shadow-lg"
+              >
+                {/* Acciones de selección/deselección por página */}
+                <DropdownMenuItem
+                  onClick={handleSelectPage}
+                  className="hover:bg-gray-100"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Seleccionar página
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleDeselectPage}
+                  className="hover:bg-gray-100"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Deseleccionar página
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="bg-gray-200" />
+
+                {/* Acciones de selección/deselección de todo */}
+                <DropdownMenuItem
+                  onClick={handleDeseectAll} // Usar la nueva función si es diferente la lógica
+                  className="hover:bg-gray-100"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Deseleccionar todo
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleSelectAll} // Usar la nueva función si es diferente la lógica
+                  className="hover:bg-gray-100"
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Seleccionar todo el listado
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="bg-gray-200" />
+
+                {/* Botón "Gestionar" movido al Dropdown */}
+                <DropdownMenuItem
+                  onClick={openManageEmployeesModal}
+                  className="hover:bg-gray-100"
+                >
+                  <Cog className="mr-2 h-4 w-4" /> {/* Icono de Cog */}
+                  Gestionar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Icono de Usuarios */}
+            <Users className="h-4 w-4 text-muted-foreground" />{" "}
+            {/* Texto gris sutil */}
+          </div>
+          {/* Lado derecho: Botón para expandir */}
+          {/* <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(false)}
+            className="h-7 w-7" // Mismo tamaño que el botón del menú
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button> */}
+        </div>
+        {/* Área de avatares de empleados seleccionados (scrollable si hay muchos) */}
+        <div className="flex flex-col items-center gap-2 py-2 overflow-y-auto flex-1">
           {selectedEmployees.map((employee) => (
             <div
               key={employee.id}
@@ -171,6 +256,7 @@ export default function EmployeeList() {
     );
   }
 
+  // --- RENDERIZADO DEL ESTADO EXPANDIDO ---
   const hasActiveFilters =
     searchFilters.search.length > 0 ||
     searchFilters.departments.length > 0 ||
@@ -178,75 +264,93 @@ export default function EmployeeList() {
 
   return (
     <div className="w-[320px] border-r border-border flex flex-col">
+      {/* Encabezado expandido */}
       <div className="p-4 border-b border-border flex items-center justify-between">
+        {/* Lado izquierdo: Menu, Users, Empleados (texto), Contador */}
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4" />
-          <h2 className="font-medium">Empleados</h2>
-          <div className="flex items-center justify-center w-5 h-5 bg-purple-600 text-white text-xs rounded-full">
-            {selectedEmployees.length}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          {/* Dropdown de acciones para selección */}
+          {/* Dropdown de acciones */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <Menu className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
+            {/* Contenido del Dropdown (igual que en estado colapsado) */}
             <DropdownMenuContent
               align="end"
               className="w-56 bg-white border-gray-200 shadow-lg"
             >
+              {/* Acciones de selección/deselección por página */}
               <DropdownMenuItem
-                onClick={handleSelectPage} // Esto ahora selecciona los 10 de la página actual
+                onClick={handleSelectPage}
                 className="hover:bg-gray-100"
               >
                 <Check className="mr-2 h-4 w-4" />
                 Seleccionar página
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={handleDeselectPage} // Esto ahora deselecciona los 10 de la página actual
+                onClick={handleDeselectPage}
                 className="hover:bg-gray-100"
               >
                 <X className="mr-2 h-4 w-4" />
                 Deseleccionar página
               </DropdownMenuItem>
+
               <DropdownMenuSeparator className="bg-gray-200" />
+
+              {/* Acciones de selección/deselección de todo */}
               <DropdownMenuItem
-                onClick={deselectAllEmployees}
+                onClick={handleDeseectAll} // Usar la nueva función si es diferente la lógica
                 className="hover:bg-gray-100"
               >
                 <X className="mr-2 h-4 w-4" />
                 Deseleccionar todo
               </DropdownMenuItem>
-              {/* Ojo: "Ver todo el listado" con selectAllEmployees(employees) podría ser confuso si solo queremos verlos y no seleccionarlos todos. Si solo es para ver sin seleccionar, habría que manejar un estado de "mostrar todos" y ajustar la paginación/filtrado para ese caso especial, o cambiar el texto. Si la intención es SELECCIONAR todos, el código actual es correcto.*/}
               <DropdownMenuItem
-                onClick={() => selectAllEmployees(employees)}
+                onClick={handleSelectAll} // Usar la nueva función si es diferente la lógica
                 className="hover:bg-gray-100"
               >
                 <Eye className="mr-2 h-4 w-4" />
                 Seleccionar todo el listado
               </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-gray-200" />
+
+              {/* Botón "Gestionar" movido al Dropdown */}
+              <DropdownMenuItem
+                onClick={openManageEmployeesModal}
+                className="hover:bg-gray-100"
+              >
+                <Cog className="mr-2 h-4 w-4" /> {/* Icono de Cog */}
+                Gestionar
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Icono de Usuarios */}
+          <Users className="h-4 w-4" />
+          {/* Texto "Empleados" */}
+          <h2 className="font-medium">Empleados</h2>
+          {/* Contador de seleccionados */}
+          <div className="flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs rounded-full">
+            {selectedEmployees.length}
+          </div>
+        </div>
 
-          <Button
+        {/* Lado derecho: Botón para colapsar */}
+        <div className="flex items-center gap-1">
+          {/* Botón para colapsar */}
+          {/* <Button
             variant="ghost"
             size="icon"
             onClick={() => setCollapsed(true)}
           >
             <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button size="sm" onClick={openManageEmployeesModal}>
-            Gestionar
-          </Button>
+          </Button> */}
         </div>
       </div>
 
+      {/* Área de filtros (igual que antes) */}
       <div className="p-4">
-        {/* Componente de búsqueda con filtros */}
         <SearchFilter
           onFilterChange={handleFilterChange}
           departments={departments}
@@ -254,6 +358,7 @@ export default function EmployeeList() {
         />
       </div>
 
+      {/* Lista de empleados paginados/filtrados (scrollable) */}
       <div className="flex-1 overflow-y-auto">
         {paginatedEmployees.length > 0 ? (
           <div className="divide-y divide-border">
@@ -270,12 +375,12 @@ export default function EmployeeList() {
         )}
       </div>
 
-      {/* Componente de paginación (siempre visible) */}
+      {/* Componente de paginación (igual que antes, ahora de 2 filas) */}
       <Pagination
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={handlePageChange}
-        totalItems={filteredEmployees.length} // Cambiado a filteredEmployees.length para reflejar el total DENTRO de los filtros
+        totalItems={filteredEmployees.length}
         selectedItems={selectedEmployees.length}
       />
     </div>
