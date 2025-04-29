@@ -1,8 +1,9 @@
 export interface Marking {
-  id: string
-  employeeId: string
-  type: string
-  time: string
-  status: string
-  location?: string
+  type: "ENTRADA" | "SALIDA" | "INICIO_DESCANSO" | "FIN_DESCANSO";
+  id: string;
+  employeeId: string;
+  time: string;
+  status: string;
+  method?: "HUELLA" | "PIN" | "ROSTRO" | null;
+  location?: string;
 }

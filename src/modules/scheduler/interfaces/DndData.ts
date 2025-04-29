@@ -1,7 +1,14 @@
+// src/modules/scheduler/interfaces/DndData.ts
 import type { Event } from "./Event";
 
-export type DraggableItemType = "event" | "sidebarItem" | "resizeHandle";
-export type DroppableContainerType = "cell" | "timelineRow" | "deleteZone"; // Añadir deleteZone si se implementa
+// Tipos Draggable Actualizados
+export type DraggableItemType =
+  | "event"
+  | "sidebarItem"
+  | "resizeHandle"
+  | "workedTime"; // NUEVO TIPO
+
+export type DroppableContainerType = "cell" | "timelineRow" | "deleteZone";
 
 export interface DraggableEventData {
   type: "event";
@@ -10,9 +17,8 @@ export interface DraggableEventData {
 
 export interface DraggableSidebarItemData {
   type: "sidebarItem";
-  itemType: string; // e.g., 'shift-s1', 'permission'
+  itemType: string;
   itemData: {
-    // Datos adicionales del tipo si son necesarios
     name: string;
     color: string;
     category: string;
@@ -20,42 +26,51 @@ export interface DraggableSidebarItemData {
   };
 }
 
+// Draggable para la barra de tiempo trabajado completa
+export interface DraggableWorkedTimeData {
+  type: "workedTime";
+  entradaMarkingId: string;
+  salidaMarkingId: string | null; // ID de la salida (puede ser null)
+}
+
+// Draggable para los handles de redimensionamiento (Ahora necesita el ID del marcaje a modificar)
 export interface DraggableResizeHandleData {
   type: "resizeHandle";
-  edge: "left" | "right";
-  event: Event;
+  edge: "left" | "right"; // Qué borde se está arrastrando
+  markingId: string; // El ID del marcaje (ENTRADA o SALIDA) que se modificará
+  relatedMarkingId: string | null; // El ID del otro marcaje (para validación de no cruce)
+  itemType: "event" | "workedTime"; // Tipo del item que se está redimensionando
+  // event?: Event; // Mantener si redimensionas eventos normales también
 }
 
 export type ActiveDragData =
   | DraggableEventData
   | DraggableSidebarItemData
   | DraggableResizeHandleData
+  | DraggableWorkedTimeData // AÑADIDO
   | null;
 
-// --- Droppable Data ---
+// --- Droppable Data (Sin cambios necesarios aquí por ahora) ---
 
 export interface DroppableCellData {
   type: "cell";
   date: Date;
   employeeId: string;
   gridInfo: {
-    // Información necesaria para calcular la hora exacta
     hourHeight: number;
     startHour: number;
-    cellTopOffset: number; // Distancia desde el top del contenedor droppable
+    cellTopOffset: number;
   };
 }
 
 export interface DroppableTimelineRowData {
   type: "timelineRow";
   employeeId: string;
+  date: Date; // Añadimos la fecha a la fila para referencia
   gridInfo: {
-    // Información necesaria para calcular la hora exacta
     hourWidth: number;
-    rowLeftOffset: number; // Distancia desde el left del contenedor droppable
+    rowLeftOffset: number;
   };
 }
-
-// Añadir DroppableDeleteZoneData si se implementa
 
 export type OverDragData = DroppableCellData | DroppableTimelineRowData | null;

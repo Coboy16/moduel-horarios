@@ -128,10 +128,11 @@ export default function LicenciasPanel({
   // Si Turnos está activo, este panel va a la derecha (float-right)
   // Si Turnos NO está activo, este panel va a la izquierda (float-left)
   const positionClass = showTurnos ? "float-right" : "float-left";
+  const panelWidthClass = showTurnos ? "w-1/2" : "w-full";
 
   return (
     <div
-      className={`border-t border-border bg-card p-3 w-1/2 ${positionClass}`}
+      className={`border-t border-l border-border bg-card p-3 ${panelWidthClass} ${positionClass}`}
     >
       <div className="flex flex-col">
         <div className="flex items-center gap-3 mb-2">

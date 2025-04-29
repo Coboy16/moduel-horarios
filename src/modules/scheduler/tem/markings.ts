@@ -1,34 +1,54 @@
-import type { Marking } from "../interfaces/Marking"
+import type { Marking } from "../interfaces/Marking";
 
 // Helper function to create dates
-const createDate = (year: number, month: number, day: number, hour: number, minute: number): string => {
-  return new Date(year, month, day, hour, minute).toISOString()
-}
+const createDate = (
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number
+): string => {
+  return new Date(year, month, day, hour, minute).toISOString();
+};
 
 // Current date for reference
-const now = new Date()
-const currentYear = now.getFullYear()
-const currentMonth = now.getMonth()
-const currentDay = now.getDate()
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentMonth = now.getMonth();
+const currentDay = now.getDate();
+
+const createTodayDate = (hour: number, minute: number): string => {
+  const now = new Date();
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    hour,
+    minute
+  ).toISOString();
+};
 
 export const mockMarkings: Marking[] = [
   // Marcajes para Juan Pérez
   {
-    id: "marking-001",
+    id: "marking-jp-001",
     employeeId: "emp-001",
     type: "ENTRADA",
-    time: createDate(currentYear, currentMonth, currentDay, 8, 55),
-    status: "A_TIEMPO",
+    time: createTodayDate(9, 30), // Tarde
+    status: "TARDANZA",
     location: "Oficina Central",
+    method: "HUELLA", // Marcó con huella
   },
   {
-    id: "marking-002",
+    id: "marking-jp-002",
     employeeId: "emp-001",
-    type: "INICIO_DESCANSO",
-    time: createDate(currentYear, currentMonth, currentDay, 12, 0),
-    status: "A_TIEMPO",
+    type: "SALIDA",
+    time: createTodayDate(18, 0), // Salió más tarde para compensar/hacer extras (8h 30m trabajadas)
+    status: "A_TIEMPO", // O podría ser 'CON_EXTRAS' si tienes ese estado
     location: "Oficina Central",
+    method: "PIN", // Marcó con PIN
   },
+
   {
     id: "marking-003",
     employeeId: "emp-001",
@@ -48,12 +68,13 @@ export const mockMarkings: Marking[] = [
 
   // Marcajes para María Rodríguez
   {
-    id: "marking-005",
+    id: "marking-mr-001",
     employeeId: "emp-002",
     type: "ENTRADA",
-    time: createDate(currentYear, currentMonth, currentDay, 9, 10),
-    status: "TARDANZA",
+    time: createTodayDate(8, 0), // A tiempo
+    status: "A_TIEMPO",
     location: "Oficina Central",
+    method: "ROSTRO", // Marcó con rostro
   },
   {
     id: "marking-006",
@@ -82,20 +103,22 @@ export const mockMarkings: Marking[] = [
 
   // Marcajes para Carlos Gómez
   {
-    id: "marking-009",
+    id: "marking-cg-001",
     employeeId: "emp-003",
     type: "ENTRADA",
-    time: createDate(currentYear, currentMonth, currentDay, 15, 50),
+    time: createTodayDate(7, 0), // A tiempo
     status: "A_TIEMPO",
     location: "Remoto",
+    method: "HUELLA",
   },
   {
-    id: "marking-010",
+    id: "marking-cg-002",
     employeeId: "emp-003",
-    type: "INICIO_DESCANSO",
-    time: createDate(currentYear, currentMonth, currentDay, 19, 0),
-    status: "A_TIEMPO",
+    type: "SALIDA",
+    time: createTodayDate(17, 0), // Hizo 2 horas extra (10 horas trabajadas)
+    status: "A_TIEMPO", // O 'CON_EXTRAS'
     location: "Remoto",
+    method: "HUELLA",
   },
   {
     id: "marking-011",
@@ -147,4 +170,4 @@ export const mockMarkings: Marking[] = [
     status: "A_TIEMPO",
     location: "Oficina Central",
   },
-]
+];

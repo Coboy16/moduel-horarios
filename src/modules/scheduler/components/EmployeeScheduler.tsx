@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -12,13 +12,14 @@ import {
   closestCenter,
   type DragStartEvent,
   type DragEndEvent,
-  type DragMoveEvent,
   type UniqueIdentifier,
+  Active,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useUI } from "../hooks/useUI";
 import { useEvents } from "../hooks/useEvents";
 import { useEmployees } from "../hooks/useEmployees";
+import { useMarkings } from "../hooks/useMarkings"; // IMPORTAR useMarkings
 import EmployeeList from "./employee/EmployeeList";
 import SchedulerCalendar from "./calendar/SchedulerCalendar";
 import FilterBar from "./filters/FilterBar";
@@ -32,20 +33,21 @@ import AddPermissionModal from "./modals/AddPermissionModal";
 import AddScheduleModal from "./modals/AddScheduleModal";
 import ContextMenu from "./context-menu/ContextMenu";
 import FloatingTimeApprovalPanel from "./floating-time/FloatingTimeApprovalPanel";
-import EventItem from "./calendar/EventItem"; // Para DragOverlay
-import TimelineEventItem from "./calendar/TimelineEventItem"; // Para DragOverlay
+import EventItem from "./calendar/EventItem";
+import TimelineEventItem from "./calendar/TimelineEventItem";
+import TimelineMarkingPin from "./calendar/TimelineMarkingPin"; // Para overlay de resize
 import {
   getActiveData,
   getOverData,
   isDraggableEvent,
   isDraggableSidebarItem,
   isDraggableResizeHandle,
-  isDroppableCell,
+  isDraggableWorkedTime, // NUEVO
   isDroppableTimelineRow,
-  calculateTimeFromOffset,
   calculateTimeFromTimelineOffset,
 } from "../utils/dndUtils";
 import type { Event } from "../interfaces/Event";
+import type { Marking } from "../interfaces/Marking"; // IMPORTAR Marking
 import { addHours, addMinutes, differenceInMinutes, set } from "date-fns";
 import { useFilters } from "../hooks/useFilters";
 import MarcajesPanel from "./turnos_licencia/MarcajesPanel";
@@ -70,37 +72,32 @@ export default function EmployeeScheduler() {
   } = useUI();
   const { addEvent, updateEvent, getEventById } = useEvents();
   const { getEmployeeById } = useEmployees();
-  const { currentView } = useFilters();
+  const { updateMarking, getMarkingById } = useMarkings(); // OBTENER funciones de marcajes
+  const { currentView, dateRange } = useFilters(); // Obtener dateRange para la fecha actual
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
-  const [activeDragItem, setActiveDragItem] = useState<Event | null>(null);
-  const [initialDragEventTimes, setInitialDragEventTimes] = useState<{
+  const [activeDragItem, setActiveDragItem] = useState<any>(null); // Puede ser Event, Marking, WorkedTime info
+  const [initialDragTimes, setInitialDragTimes] = useState<{
     start: Date;
     end: Date;
-  } | null>(null);
+  } | null>(null); // Para eventos y workedTime
+  const [, setIsResizing] = useState(false);
 
-  // Estado para mostrar/ocultar paneles
+  // Estado para paneles de turnos/licencias
   const [showTurnos, setShowTurnos] = useState(false);
   const [showLicencias, setShowLicencias] = useState(false);
 
-  // Escuchar eventos de activación/desactivación de paneles desde FilterBar
+  // Listener para paneles (sin cambios)
   useEffect(() => {
-    // Esta función será llamada por FilterBar cuando se active/desactive turnos
-    const handleTurnosToggle = (event: CustomEvent) => {
+    const handleTurnosToggle = (event: CustomEvent) =>
       setShowTurnos(event.detail.show);
-    };
-
-    // Esta función será llamada por FilterBar cuando se active/desactive licencias
-    const handleLicenciasToggle = (event: CustomEvent) => {
+    const handleLicenciasToggle = (event: CustomEvent) =>
       setShowLicencias(event.detail.show);
-    };
-
     window.addEventListener("turnos-toggle" as any, handleTurnosToggle as any);
     window.addEventListener(
       "licencias-toggle" as any,
       handleLicenciasToggle as any
     );
-
     return () => {
       window.removeEventListener(
         "turnos-toggle" as any,
@@ -113,168 +110,184 @@ export default function EmployeeScheduler() {
     };
   }, []);
 
-  // Configuración de sensores para dnd-kit
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      // Requiere mover al menos 5px para iniciar el drag
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Cerrar context menu al hacer click fuera
+  // Cerrar context menu (sin cambios)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Asegurarse que el click no fue dentro de un elemento que abre el menú
       const target = event.target as HTMLElement;
       if (showContextMenu && !target.closest("[data-contextmenu-trigger]")) {
-        // Asume que los triggers tienen este atributo
         closeContextMenu();
       }
     };
-
     document.addEventListener("click", handleClickOutside);
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-    };
+    return () => document.removeEventListener("click", handleClickOutside);
   }, [showContextMenu, closeContextMenu]);
 
+  // --- onDragStart ---
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
-      const activeData = getActiveData(event.active);
-      setActiveId(event.active.id);
+      const { active } = event;
+      const activeData = getActiveData(active);
+      setActiveId(active.id);
+      setIsResizing(false);
+
+      console.log("Drag Start - ID:", active.id, "Data:", activeData);
 
       if (isDraggableEvent(activeData)) {
         setActiveDragItem(activeData.event);
-        setInitialDragEventTimes({
+        setInitialDragTimes({
           start: new Date(activeData.event.startTime),
           end: new Date(activeData.event.endTime),
         });
+      } else if (isDraggableWorkedTime(activeData)) {
+        const entrada = getMarkingById(activeData.entradaMarkingId);
+        const salida = activeData.salidaMarkingId
+          ? getMarkingById(activeData.salidaMarkingId)
+          : null;
+        if (entrada) {
+          // Guardamos los datos necesarios para el overlay y onDragEnd
+          setActiveDragItem({
+            type: "workedTime", // Añadir tipo para el overlay
+            entrada: entrada,
+            salida: salida,
+            employeeId: entrada.employeeId, // Guardar employeeId inicial
+            currentDateISO: new Date(entrada.time).toISOString().split("T")[0], // Guardar fecha
+          });
+          setInitialDragTimes({
+            start: new Date(entrada.time),
+            end: salida ? new Date(salida.time) : new Date(),
+          }); // Usar AHORA si no hay salida
+        } else {
+          setActiveDragItem(null);
+          setInitialDragTimes(null);
+        }
       } else if (isDraggableResizeHandle(activeData)) {
-        setActiveDragItem(activeData.event); // Mostramos el evento mientras redimensionamos
-        setInitialDragEventTimes({
-          start: new Date(activeData.event.startTime),
-          end: new Date(activeData.event.endTime),
-        });
+        setIsResizing(true);
+        const marking = getMarkingById(activeData.markingId);
+        setActiveDragItem(marking); // El item visual es el marcaje
+        if (marking) {
+          // Guardar la hora inicial del marcaje que se está moviendo
+          setInitialDragTimes({
+            start: new Date(marking.time),
+            end: new Date(marking.time),
+          });
+        } else {
+          setInitialDragTimes(null);
+        }
       } else if (isDraggableSidebarItem(activeData)) {
-        // Crear un evento temporal para el overlay si se desea
+        // ... (lógica existente para crear evento temporal)
         const tempEvent: Event = {
           id: "overlay-temp",
           title: activeData.itemData.name,
           type: activeData.itemType,
-          employeeId: "temp", // Se asignará al soltar
-          startTime: new Date().toISOString(), // Placeholder
+          employeeId: "temp",
+          startTime: new Date().toISOString(),
           endTime: addHours(
             new Date(),
             activeData.itemData.defaultDurationHours ?? 1
-          ).toISOString(), // Placeholder
+          ).toISOString(),
           isAllDay: activeData.itemData.category === "permission",
         };
         setActiveDragItem(tempEvent);
-        setInitialDragEventTimes(null); // No aplica para creación
+        setInitialDragTimes(null);
       } else {
         setActiveDragItem(null);
-        setInitialDragEventTimes(null);
+        setInitialDragTimes(null);
       }
     },
-    [getEventById]
+    [getEventById, getMarkingById]
   );
 
-  const handleDragMove = useCallback(
-    (event: DragMoveEvent) => {
-      const { active } = event;
-      const activeData = getActiveData(active);
-
-      if (!isDraggableResizeHandle(activeData) || !initialDragEventTimes) {
-        return; // Solo manejamos resize en dragMove por ahora para feedback visual
-      }
-
-      // --- Lógica de Redimensionamiento (Feedback Visual - Opcional) ---
-      // Podrías actualizar un estado temporal aquí para mostrar el resize en tiempo real,
-      // pero para simplificar, actualizaremos solo en onDragEnd.
-      // La lógica sería similar a onDragEnd, pero actualizando un estado temporal
-      // en lugar del contexto de eventos.
-    },
-    [initialDragEventTimes]
-  );
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
+    // Podríamos añadir feedback visual aquí si fuese necesario,
+    // por ejemplo, actualizando la posición del overlay de forma más fina.
+  }, []);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over, delta } = event;
-      setActiveId(null); // Limpiar item activo
-      setActiveDragItem(null); // Limpiar overlay
-      setInitialDragEventTimes(null); // Limpiar tiempos iniciales
+      const activeIdBeforeEnd = activeId; // Captura el ID antes de limpiarlo
+      const activeDragItemBeforeEnd = activeDragItem; // Captura el item antes de limpiarlo
+      const initialDragTimesBeforeEnd = initialDragTimes; // Captura tiempos iniciales
 
-      if (!over) {
-        console.log("DragEnd: No 'over' element.");
-        return; // No se soltó sobre un área válida
+      // Limpiar estado inmediatamente para la UI
+      setActiveId(null);
+      setActiveDragItem(null);
+      setInitialDragTimes(null);
+      setIsResizing(false);
+
+      if (!over || !activeIdBeforeEnd || !activeDragItemBeforeEnd) {
+        console.log(
+          "DragEnd: No 'over' element or missing active data after cleanup."
+        );
+        return;
       }
 
-      const activeData = getActiveData(active);
+      // Usar los datos capturados antes de limpiar el estado
+      const activeData = getActiveData({
+        id: activeIdBeforeEnd,
+        data: { current: activeDragItemBeforeEnd },
+      } as any);
       const overData = getOverData(over);
 
       if (!activeData || !overData) {
-        console.log("DragEnd: Missing active or over data.", {
+        console.log("DragEnd: Missing reconstructed active or over data.", {
           activeData,
           overData,
         });
         return;
       }
 
-      console.log("DragEnd:", { activeData, overData, delta });
+      console.log(
+        "DragEnd - Active:",
+        activeData,
+        "Over:",
+        overData,
+        "Delta:",
+        delta
+      );
+
+      // Necesitamos el BoundingRect del contenedor del scheduler/calendario que es scrollable
+      // Asumimos que es el contenedor principal o uno específico con ref
+      const containerRect =
+        schedulerContainerRef.current?.getBoundingClientRect();
+      const scrollLeft = schedulerContainerRef.current?.scrollLeft ?? 0;
+      const scrollTop = schedulerContainerRef.current?.scrollTop ?? 0; // Si hay scroll vertical también
 
       try {
-        // --- Caso 1: Crear Evento desde Sidebar ---
+        // --- Caso 1: Crear Evento desde Sidebar (Timeline) ---
         if (
           isDraggableSidebarItem(activeData) &&
-          (isDroppableCell(overData) || isDroppableTimelineRow(overData))
+          isDroppableTimelineRow(overData)
         ) {
-          console.log("Creating event from sidebar item...");
           const { itemType, itemData } = activeData;
           const employeeId = overData.employeeId;
           const isPermission = itemData.category === "permission";
 
-          let startTime: Date;
-          let endTime: Date;
-          let dropTime: Date;
+          const dropTime = calculateTimeFromTimelineOffset(
+            (event.activatorEvent as PointerEvent).clientX,
+            containerRect, // Pasar el Rect del contenedor scrollable
+            scrollLeft,
+            overData.gridInfo
+          );
 
-          if (isDroppableCell(overData)) {
-            // Calcular la hora basada en la posición Y del drop
-            dropTime = calculateTimeFromOffset(
-              (event.activatorEvent as PointerEvent).clientY, // Usar coordenadas del evento original
-              overData.gridInfo
-            );
-            startTime = set(overData.date, {
-              hours: dropTime.getHours(),
-              minutes: dropTime.getMinutes(),
-            });
-          } else {
-            // isDroppableTimelineRow
-            // Calcular la hora basada en la posición X del drop
-            dropTime = calculateTimeFromTimelineOffset(
-              (event.activatorEvent as PointerEvent).clientX, // Usar coordenadas del evento original
-              overData.gridInfo
-            );
-            // Asumimos que la fecha es la del `startDate` del filtro actual para Timeline
-            const timelineDate =
-              event.active.data.current?.timelineDate ?? new Date(); // Necesitas pasar la fecha actual de la timeline
-            startTime = set(timelineDate, {
-              hours: dropTime.getHours(),
-              minutes: dropTime.getMinutes(),
-            });
-          }
+          const targetDate = overData.date; // Usar la fecha de la fila
+          let startTime = set(targetDate, {
+            hours: dropTime.getHours(),
+            minutes: dropTime.getMinutes(),
+            seconds: 0,
+            milliseconds: 0,
+          });
+          let endTime: Date;
 
           if (isPermission) {
-            // Permisos suelen ser de día completo
-            startTime.setHours(0, 0, 0, 0);
-            endTime = new Date(startTime);
-            endTime.setHours(23, 59, 59, 999);
+            startTime = set(startTime, { hours: 0, minutes: 0 });
+            endTime = set(startTime, { hours: 23, minutes: 59 });
           } else {
-            // Turnos con duración default
             endTime = addHours(startTime, itemData.defaultDurationHours ?? 1);
           }
 
@@ -285,138 +298,183 @@ export default function EmployeeScheduler() {
             startTime: startTime.toISOString(),
             endTime: endTime.toISOString(),
             isAllDay: isPermission,
-            // location: getEmployeeById(employeeId)?.location, // Opcional
           };
-          console.log("Adding new event:", newEvent);
           addEvent(newEvent);
+          console.log("Timeline: Added event from sidebar", newEvent);
         }
-        // --- Caso 2: Mover Evento Existente ---
+        // --- Caso 2: Mover Evento Existente (Timeline) ---
         else if (
           isDraggableEvent(activeData) &&
-          (isDroppableCell(overData) || isDroppableTimelineRow(overData))
+          isDroppableTimelineRow(overData) &&
+          initialDragTimesBeforeEnd
         ) {
-          console.log("Moving existing event...");
           const eventToMove = activeData.event;
-          const originalStart = new Date(eventToMove.startTime);
-          const originalEnd = new Date(eventToMove.endTime);
           const durationMinutes = differenceInMinutes(
-            originalEnd,
-            originalStart
+            initialDragTimesBeforeEnd.end,
+            initialDragTimesBeforeEnd.start
           );
-
-          let newStartTime: Date;
           const targetEmployeeId = overData.employeeId;
 
-          if (isDroppableCell(overData)) {
-            // Calcular la nueva hora de inicio basada en dónde se soltó
-            const dropTime = calculateTimeFromOffset(
-              (event.activatorEvent as PointerEvent).clientY, // Usar coordenadas del evento original
-              overData.gridInfo
-            );
-            newStartTime = set(overData.date, {
-              hours: dropTime.getHours(),
-              minutes: dropTime.getMinutes(),
-            });
-          } else {
-            // isDroppableTimelineRow
-            const dropTime = calculateTimeFromTimelineOffset(
-              (event.activatorEvent as PointerEvent).clientX, // Usar coordenadas del evento original
-              overData.gridInfo
-            );
-            const timelineDate =
-              event.active.data.current?.timelineDate ?? new Date(); // Necesitas pasar la fecha actual de la timeline
-            newStartTime = set(timelineDate, {
-              hours: dropTime.getHours(),
-              minutes: dropTime.getMinutes(),
-            });
+          const dropTime = calculateTimeFromTimelineOffset(
+            (event.activatorEvent as PointerEvent).clientX,
+            containerRect,
+            scrollLeft,
+            overData.gridInfo
+          );
+
+          const targetDate = overData.date;
+          let newStartTime = set(targetDate, {
+            hours: dropTime.getHours(),
+            minutes: dropTime.getMinutes(),
+            seconds: 0,
+            milliseconds: 0,
+          });
+
+          if (eventToMove.isAllDay) {
+            newStartTime = set(newStartTime, { hours: 0, minutes: 0 });
           }
 
           const newEndTime = addMinutes(newStartTime, durationMinutes);
-
           const updatedEvent: Event = {
             ...eventToMove,
-            employeeId: targetEmployeeId, // Actualiza el empleado si cambió
+            employeeId: targetEmployeeId,
             startTime: newStartTime.toISOString(),
             endTime: newEndTime.toISOString(),
           };
-          console.log("Updating event (move):", updatedEvent);
           updateEvent(updatedEvent);
+          console.log("Timeline: Moved event", updatedEvent);
         }
-        // --- Caso 3: Redimensionar Evento Existente ---
-        else if (isDraggableResizeHandle(activeData) && initialDragEventTimes) {
-          console.log("Resizing event...");
-          const eventToResize = activeData.event;
-          const { edge } = activeData;
-          const { start: initialStart, end: initialEnd } =
-            initialDragEventTimes;
-
-          let newStartTime = new Date(initialStart);
-          let newEndTime = new Date(initialEnd);
-          let pixelToMinutesFactor = 1; // Minutos por píxel, necesita cálculo real
-
-          // --- Cálculo del factor pixel-minuto (¡IMPORTANTE!) ---
-          // Este cálculo depende de la vista y necesita la altura/ancho por hora
-          if (currentView === "day" && isDroppableCell(overData)) {
-            const hourHeight = overData.gridInfo.hourHeight;
-            if (hourHeight > 0) {
-              pixelToMinutesFactor = 60 / hourHeight;
-            }
-          } else if (
-            currentView === "timeline" &&
-            isDroppableTimelineRow(overData)
-          ) {
-            const hourWidth = overData.gridInfo.hourWidth;
-            if (hourWidth > 0) {
-              pixelToMinutesFactor = 60 / hourWidth;
-            }
-          }
-          // Añadir lógica para 'week' si es necesario
-
-          if (currentView === "timeline") {
-            const minutesChangedX = delta.x * pixelToMinutesFactor;
-            if (edge === "left") {
-              newStartTime = addMinutes(initialStart, minutesChangedX);
-            } else {
-              // edge === 'right'
-              newEndTime = addMinutes(initialEnd, minutesChangedX);
-            }
-          } else {
-            // DayView (y WeekView necesitaría lógica similar)
-            // const minutesChangedY = delta.y * pixelToMinutesFactor;
-            // if (edge === "left") {
-            //   newStartTime = addMinutes(initialStart, minutesChangedY);
-            // } else {
-            //   // edge === 'right'
-            //   newEndTime = addMinutes(initialEnd, minutesChangedY);
-            // }
-          }
-
-          // Validar que el inicio no sea posterior al fin
-          if (newStartTime >= newEndTime) {
-            if (edge === "left") newStartTime = addMinutes(newEndTime, -15);
-            // Duración mínima 15 min
-            else newEndTime = addMinutes(newStartTime, 15);
-          }
-
-          // Validar límites del día/vista si es necesario (ej. no empezar antes de las 00:00)
-          // newStartTime = clampDateToView(newStartTime, viewBoundaries);
-          // newEndTime = clampDateToView(newEndTime, viewBoundaries);
-
-          const updatedEvent: Event = {
-            ...eventToResize,
-            startTime: newStartTime.toISOString(),
-            endTime: newEndTime.toISOString(),
+        // --- Caso 3: Mover WorkedTimeBar (Timeline) ---
+        else if (
+          isDraggableWorkedTime(activeData) &&
+          isDroppableTimelineRow(overData) &&
+          initialDragTimesBeforeEnd
+        ) {
+          console.log("Moving WorkedTimeBar...");
+          // Los datos están en activeDragItemBeforeEnd (que tiene {entrada, salida})
+          const { entrada, salida } = activeDragItemBeforeEnd as {
+            entrada: Marking;
+            salida: Marking | null;
           };
+          if (!entrada) return;
 
-          console.log("Updating event (resize):", updatedEvent);
-          updateEvent(updatedEvent);
+          const durationMinutes = differenceInMinutes(
+            initialDragTimesBeforeEnd.end,
+            initialDragTimesBeforeEnd.start
+          );
+          const targetEmployeeId = overData.employeeId;
+
+          const dropTime = calculateTimeFromTimelineOffset(
+            (event.activatorEvent as PointerEvent).clientX,
+            containerRect,
+            scrollLeft,
+            overData.gridInfo
+          );
+
+          const targetDate = overData.date;
+          const newStartTime = set(targetDate, {
+            hours: dropTime.getHours(),
+            minutes: dropTime.getMinutes(),
+            seconds: 0,
+            milliseconds: 0,
+          });
+          const newEndTime = addMinutes(newStartTime, durationMinutes);
+
+          // Crear objetos actualizados y llamar a updateMarking
+          const updatedEntrada: Marking = {
+            ...entrada,
+            employeeId: targetEmployeeId,
+            time: newStartTime.toISOString(),
+          };
+          updateMarking(updatedEntrada);
+          console.log("Updating ENTRADA marking:", updatedEntrada);
+
+          if (salida) {
+            const updatedSalida: Marking = {
+              ...salida,
+              employeeId: targetEmployeeId,
+              time: newEndTime.toISOString(),
+            };
+            updateMarking(updatedSalida);
+            console.log("Updating SALIDA marking:", updatedSalida);
+          }
         }
-        // --- Caso 4: Arrastrar a zona de eliminación (si se implementa) ---
-        // else if (over?.id === 'delete-zone') {
-        //   if (isDraggableEvent(activeData)) {
-        //     deleteEvent(activeData.event.id);
-        //   }
-        // }
+        // --- Caso 4: Redimensionar WorkedTimeBar (Timeline) ---
+        else if (
+          isDraggableResizeHandle(activeData) &&
+          activeData.itemType === "workedTime" &&
+          isDroppableTimelineRow(overData) &&
+          initialDragTimesBeforeEnd
+        ) {
+          console.log("Resizing WorkedTimeBar handle...");
+          const { edge, markingId, relatedMarkingId } = activeData;
+          // El marcaje a actualizar está en activeDragItemBeforeEnd
+          const markingToUpdate = activeDragItemBeforeEnd as Marking | null;
+          const relatedMarking = relatedMarkingId
+            ? getMarkingById(relatedMarkingId)
+            : null;
+
+          if (!markingToUpdate || markingToUpdate.id !== markingId) {
+            // Verificar que es el marcaje correcto
+            console.error("Resize failed: Marking data mismatch");
+            return;
+          }
+
+          // Calcular la nueva hora basada en la posición final del handle
+          const handleFinalX =
+            (event.activatorEvent as PointerEvent).clientX + delta.x; // Posición final del puntero
+          const dropTime = calculateTimeFromTimelineOffset(
+            handleFinalX,
+            containerRect,
+            scrollLeft,
+            overData.gridInfo
+          );
+
+          const targetDate = overData.date; // Usar la fecha de la fila
+          let newMarkingTime = set(targetDate, {
+            hours: dropTime.getHours(),
+            minutes: dropTime.getMinutes(),
+            seconds: 0,
+            milliseconds: 0,
+          });
+
+          // --- Validación de no cruce ---
+          if (relatedMarking) {
+            const relatedTime = new Date(relatedMarking.time);
+            const minSeparation = 5; // 5 minutos mínimo entre entrada y salida
+            if (
+              edge === "left" &&
+              newMarkingTime >= addMinutes(relatedTime, -minSeparation)
+            ) {
+              newMarkingTime = addMinutes(relatedTime, -minSeparation);
+              console.warn(
+                "Resize adjusted: Start time cannot be too close to end time."
+              );
+            } else if (
+              edge === "right" &&
+              newMarkingTime <= addMinutes(relatedTime, minSeparation)
+            ) {
+              newMarkingTime = addMinutes(relatedTime, minSeparation);
+              console.warn(
+                "Resize adjusted: End time cannot be too close to start time."
+              );
+            }
+          }
+          // --- Fin Validación ---
+
+          const updatedMarking: Marking = {
+            ...markingToUpdate,
+            time: newMarkingTime.toISOString(),
+          };
+          updateMarking(updatedMarking);
+          console.log(
+            `Updating ${
+              edge === "left" ? "ENTRADA" : "SALIDA"
+            } marking (resize):`,
+            updatedMarking
+          );
+        }
+        // ... (otros casos como resize de Event si es necesario) ...
         else {
           console.log("DragEnd: No matching D&D handler for:", {
             activeType: activeData?.type,
@@ -425,108 +483,164 @@ export default function EmployeeScheduler() {
         }
       } catch (error) {
         console.error("Error during drag end processing:", error);
-        // Opcional: Mostrar notificación de error al usuario
-      } finally {
-        // Asegurarse de limpiar estados incluso si hay errores
-        setActiveId(null);
-        setActiveDragItem(null);
-        setInitialDragEventTimes(null);
       }
+      // No limpiar estado aquí, ya se hizo al principio
     },
-    [addEvent, updateEvent, getEmployeeById, initialDragEventTimes, currentView]
+    [
+      // Asegúrate de incluir todas las dependencias necesarias
+      activeId,
+      activeDragItem,
+      initialDragTimes, // Dependencias del estado local capturado
+      addEvent,
+      updateEvent,
+      getEmployeeById,
+      getMarkingById,
+      updateMarking,
+      currentView,
+      dateRange, // Del contexto de filtros
+      // No necesitas limpiar el estado aquí como dependencia
+    ]
   );
 
-  // ------ Renderizado del Overlay ------
+  // --- renderDragOverlay ---
   const renderDragOverlay = () => {
     if (!activeId || !activeDragItem) return null;
 
-    const activeData = getActiveData({
-      id: activeId,
-      data: {
-        current: {
-          type: activeDragItem.id === "overlay-temp" ? "sidebarItem" : "event",
-          event: activeDragItem,
-        },
-      },
-    } as any); // Simula el objeto Active
+    // Determinar qué renderizar basado en el tipo de activeDragItem
+    const item = activeDragItem; // El estado local ya tiene la info correcta
 
-    // Renderiza el overlay basado en el tipo de item
+    // --- Evento o Sidebar Item ---
     if (
-      isDraggableEvent(activeData) ||
-      isDraggableResizeHandle(activeData) ||
-      (isDraggableSidebarItem(activeData) &&
-        activeDragItem.id === "overlay-temp")
+      item?.type === "shift-s1" ||
+      item?.type === "permission" ||
+      item?.title
     ) {
-      // Usamos los componentes de evento existentes para el overlay
-      // Pasamos un estilo básico, dnd-kit se encarga de la posición
-      const style: React.CSSProperties = {
-        cursor: "grabbing",
-        // Puedes añadir más estilos si es necesario (ej. tamaño fijo)
-      };
+      // Asumiendo que los eventos tienen 'title' y los sidebar items tienen 'type' conocido
+      const eventForOverlay = item as Event; // Tratarlo como evento
+      const style: React.CSSProperties = { cursor: "grabbing", opacity: 0.7 };
+      const hourWidth = 80; // Coincidir con TimelineView
+      const rowHeight = 50; // Coincidir con TimelineView
 
       if (currentView === "timeline") {
-        return <TimelineEventItem event={activeDragItem} style={style} />;
-      } else {
-        // Usar EventItem para Day y Week (Week necesitará ajustes de estilo)
-        // El tamaño en el overlay puede ser fijo o basado en la duración default
-        const overlayHeight =
-          currentView === "day"
-            ? `${
-                (differenceInMinutes(
-                  new Date(activeDragItem.endTime),
-                  new Date(activeDragItem.startTime)
-                ) /
-                  60) *
-                60
-              }px`
-            : "auto"; // Altura base 60px/hr para DayView
-
-        return (
-          <EventItem
-            event={activeDragItem}
-            style={{ ...style, height: overlayHeight, width: "150px" }}
-          />
+        const durationMinutes = differenceInMinutes(
+          new Date(eventForOverlay.endTime),
+          new Date(eventForOverlay.startTime)
         );
+        style.width = `${Math.max(
+          hourWidth / 4,
+          (durationMinutes / 60) * hourWidth
+        )}px`;
+        style.height = `${rowHeight * 0.35}px`; // Coincidir altura de barra
+        // Usar TimelineEventItem si es un evento asignado, o un div simple si es de sidebar
+        if (eventForOverlay.id !== "overlay-temp") {
+          return <TimelineEventItem event={eventForOverlay} style={style} />;
+        } else {
+          // Div simple para items de sidebar
+          return (
+            <div
+              style={{
+                ...style,
+                backgroundColor: "#cbd5e1",
+                borderRadius: "4px",
+              }}
+            >
+              {eventForOverlay.title}
+            </div>
+          );
+        }
+      } else {
+        // ... (Lógica para Day/Week si se usa EventItem)
+        return <EventItem event={eventForOverlay} style={style} />;
       }
     }
 
+    // --- WorkedTimeBar ---
+    if (item?.type === "workedTime" && item?.entrada) {
+      const { entrada, salida } = item as {
+        entrada: Marking;
+        salida: Marking | null;
+      };
+      const entradaTime = new Date(entrada.time);
+      const salidaTime = salida ? new Date(salida.time) : new Date(); // Usar AHORA si no hay salida
+      const duration = Math.max(
+        0,
+        differenceInMinutes(salidaTime, entradaTime)
+      ); // Evitar duraciones negativas
+      const standardMins = 8 * 60;
+      const regularMinutes = Math.min(duration, standardMins);
+      const overtimeMinutes = Math.max(0, duration - regularMinutes);
+      const hourWidth = 80;
+      const rowHeight = 50;
+
+      const overlayStyle: React.CSSProperties = {
+        cursor: "grabbing",
+        height: `${rowHeight * 0.35}px`,
+        width: `${Math.max(1, (duration / 60) * hourWidth)}px`, // Ancho total
+        opacity: 0.7,
+        display: "flex",
+        borderRadius: "4px", // Redondear el contenedor principal
+        overflow: "hidden", // Esconder overflow de barras internas
+      };
+
+      // Renderizar versión simplificada de la barra
+      return (
+        <div style={overlayStyle}>
+          <div
+            className="h-full bg-green-400"
+            style={{ width: `${(regularMinutes / 60) * hourWidth}px` }}
+          ></div>
+          {overtimeMinutes > 0 && (
+            <div
+              className="h-full bg-yellow-400"
+              style={{ width: `${(overtimeMinutes / 60) * hourWidth}px` }}
+            ></div>
+          )}
+        </div>
+      );
+    }
+
+    // --- Resize Handle ---
+    if (isResizing && item?.time) {
+      // Si isResizing es true y item es un Marcaje
+      const markingForOverlay = item as Marking;
+      const style: React.CSSProperties = { cursor: "ew-resize", opacity: 0.7 };
+      // Mostrar solo el pin
+      return <TimelineMarkingPin marking={markingForOverlay} style={style} />;
+    }
+
+    console.log("Overlay: No matching item type", item); // Debug
     return null;
   };
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={closestCenter} // O appropriateForTimeline
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragMove={handleDragMove}
+      onDragMove={handleDragMove} // Opcional
     >
       <div className="flex flex-col h-screen">
-        {/* Contenedor principal con altura completa */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Contenedor para FilterBar y el resto */}
           <FilterBar />
           <div className="flex flex-1 overflow-hidden">
-            {/* Contenedor para EmployeeList y Calendar */}
             <EmployeeList />
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Contenedor del calendario */}
-              <SchedulerCalendar />
+              {/* Pasar la referencia del grid si TimelineView la necesita */}
+              <SchedulerCalendar /* gridRef={gridRef} */ />
             </div>
           </div>
         </div>
 
-        {/* Panel de marcajes (siempre visible) */}
+        {/* Paneles inferiores */}
         <MarcajesPanel />
-
-        {/* Contenedor para paneles de turnos y licencias */}
         {(showTurnos || showLicencias) && (
-          <div className="w-full clearfix">
-            {/* Panel de turnos (mostrado condicionalmente) */}
+          <div className="w-full clearfix border-t">
+            {" "}
+            {/* Añadido border-t */}
             {showTurnos && <TurnosPanel />}
-
-            {/* Panel de licencias (mostrado condicionalmente) */}
-            {showLicencias && <LicenciasPanel />}
+            {showLicencias && <LicenciasPanel showTurnos={showTurnos} />}{" "}
+            {/* Pasar prop */}
           </div>
         )}
       </div>
@@ -554,7 +668,7 @@ export default function EmployeeScheduler() {
       {/* Floating Time Panel */}
       {showFloatingTimePanel && <FloatingTimeApprovalPanel />}
 
-      {/* Drag Overlay: Muestra el elemento mientras se arrastra */}
+      {/* Drag Overlay */}
       <DragOverlay dropAnimation={null}>{renderDragOverlay()}</DragOverlay>
     </DndContext>
   );
