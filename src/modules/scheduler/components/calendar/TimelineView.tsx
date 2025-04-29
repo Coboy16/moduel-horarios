@@ -93,11 +93,8 @@ const DroppableRow: React.FC<DroppableRowProps> = ({
 
 export default function TimelineView({
   currentDate,
-  events,
   markings,
   employees: selectedEmployees,
-  containerWidth,
-  containerHeight,
 }: TimelineViewProps) {
   const { openContextMenu } = useUI();
   const { employees: allEmployees } = useEmployees();
