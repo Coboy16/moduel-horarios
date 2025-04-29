@@ -1,117 +1,92 @@
-import * as React from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+"use client";
 
-import { cn } from "../../utils/formatters";
-import { ButtonProps, buttonVariants } from "./button";
+import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { Button } from "../ui/button";
+import { cn } from "../../utils/formatters"; // Asumo que cn viene de un utility como classnames o clsx
+import { useState } from "react";
 
-const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
-  <nav
-    role="navigation"
-    aria-label="pagination"
-    className={cn("mx-auto flex w-full justify-center", className)}
-    {...props}
-  />
-);
-Pagination.displayName = "Pagination";
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  totalItems?: number;
+  selectedItems?: number;
+}
 
-const PaginationContent = React.forwardRef<
-  HTMLUListElement,
-  React.ComponentProps<"ul">
->(({ className, ...props }, ref) => (
-  <ul
-    ref={ref}
-    className={cn("flex flex-row items-center gap-1", className)}
-    {...props}
-  />
-));
-PaginationContent.displayName = "PaginationContent";
+export default function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems = 0,
+  selectedItems = 0,
+}: PaginationProps) {
+  const [isSelectionOpen, setIsSelectionOpen] = useState(false); // Esto controla la rotación de la flecha abajo, aunque no hay contenido desplegable en este componente según la imagen.
 
-const PaginationItem = React.forwardRef<
-  HTMLLIElement,
-  React.ComponentProps<"li">
->(({ className, ...props }, ref) => (
-  <li ref={ref} className={cn("", className)} {...props} />
-));
-PaginationItem.displayName = "PaginationItem";
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      onPageChange(currentPage - 1);
+    }
+  };
 
-type PaginationLinkProps = {
-  isActive?: boolean;
-} & Pick<ButtonProps, "size"> &
-  React.ComponentProps<"a">;
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      onPageChange(currentPage + 1);
+    }
+  };
 
-const PaginationLink = ({
-  className,
-  isActive,
-  size = "icon",
-  ...props
-}: PaginationLinkProps) => (
-  <a
-    aria-current={isActive ? "page" : undefined}
-    className={cn(
-      buttonVariants({
-        variant: isActive ? "outline" : "ghost",
-        size,
-      }),
-      className
-    )}
-    {...props}
-  />
-);
-PaginationLink.displayName = "PaginationLink";
+  // Esta función alterna el estado, lo que hace que la flecha rote.
+  const toggleSelectionInfo = () => {
+    setIsSelectionOpen(!isSelectionOpen);
+  };
 
-const PaginationPrevious = ({
-  className,
-  ...props
-}: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink
-    aria-label="Go to previous page"
-    size="default"
-    className={cn("gap-1 pl-2.5", className)}
-    {...props}
-  >
-    <ChevronLeft className="h-4 w-4" />
-    <span>Previous</span>
-  </PaginationLink>
-);
-PaginationPrevious.displayName = "PaginationPrevious";
+  return (
+    <div className="border-t border-border">
+      {/* Fila 1: navegación de páginas */}
+      <div className="flex items-center justify-between p-2 border-b border-border">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handlePrevPage}
+          disabled={currentPage === 1}
+          className="h-7 w-7"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
 
-const PaginationNext = ({
-  className,
-  ...props
-}: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink
-    aria-label="Go to next page"
-    size="default"
-    className={cn("gap-1 pr-2.5", className)}
-    {...props}
-  >
-    <span>Next</span>
-    <ChevronRight className="h-4 w-4" />
-  </PaginationLink>
-);
-PaginationNext.displayName = "PaginationNext";
+        <div className="text-sm text-muted-foreground">
+          Página {currentPage} de {totalPages}
+        </div>
 
-const PaginationEllipsis = ({
-  className,
-  ...props
-}: React.ComponentProps<"span">) => (
-  <span
-    aria-hidden
-    className={cn("flex h-9 w-9 items-center justify-center", className)}
-    {...props}
-  >
-    <MoreHorizontal className="h-4 w-4" />
-    <span className="sr-only">More pages</span>
-  </span>
-);
-PaginationEllipsis.displayName = "PaginationEllipsis";
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleNextPage}
+          disabled={currentPage === totalPages}
+          className="h-7 w-7"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
-export {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-};
+      {/* Fila 2: información de selección */}
+      <div
+        className={cn(
+          "flex items-center justify-between p-2",
+          "cursor-pointer select-none"
+        )}
+        onClick={toggleSelectionInfo}
+      >
+        <div className="text-sm text-muted-foreground">
+          Seleccionados: {selectedItems} de {totalItems}
+        </div>
+
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform",
+            isSelectionOpen && "transform rotate-180"
+          )}
+        />
+      </div>
+    </div>
+  );
+}

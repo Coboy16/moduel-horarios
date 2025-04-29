@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo, SetStateAction } from "react";
+import { useState, useMemo, SetStateAction, useEffect } from "react";
 import { useEmployees } from "../../hooks/useEmployees";
 import { useUI } from "../../hooks/useUI";
 import { Button } from "../ui/button";
-// import SearchFilter from "./SearchFilter"; // Importamos nuestro nuevo componente
 
 import {
   Users,
@@ -24,6 +23,11 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import SearchFilter from "../filters/SearchFilter";
+import Pagination from "../filters/Pagination";
+
+// Número de empleados por página
+// CAMBIADO DE 5 a 10
+const ITEMS_PER_PAGE = 10;
 
 export default function EmployeeList() {
   const {
@@ -42,6 +46,7 @@ export default function EmployeeList() {
     positions: [] as string[],
   });
   const [collapsed, setCollapsed] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Extraer departamentos y posiciones únicas de los empleados para los filtros
   const departments = useMemo(() => {
@@ -89,6 +94,27 @@ export default function EmployeeList() {
     });
   }, [employees, searchFilters]);
 
+  // Calcular el total de páginas
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEmployees.length / ITEMS_PER_PAGE)
+  );
+
+  // Resetear a página 1 cuando cambian los filtros
+
+  // Obtener los empleados para la página actual
+  const paginatedEmployees = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE; // Usa ITEMS_PER_PAGE aquí también
+    return filteredEmployees.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredEmployees, currentPage]);
+
+  // Asegurarnos de que currentPage es válido cuando cambia el número total de páginas
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   // Manejar cambios en los filtros
   const handleFilterChange = (
     filters: SetStateAction<{
@@ -102,15 +128,21 @@ export default function EmployeeList() {
 
   // Función para seleccionar todos los empleados filtrados
   const handleSelectPage = () => {
-    selectAllEmployees(filteredEmployees);
+    // Asegúrate de pasar los empleados PAGINADOS a selectAllEmployees
+    selectAllEmployees(paginatedEmployees);
   };
 
   // Función para deseleccionar todos los empleados filtrados
   const handleDeselectPage = () => {
     // Deseleccionar solo los empleados que están en la lista filtrada actual
-    filteredEmployees.forEach((emp) => {
+    paginatedEmployees.forEach((emp) => {
       deselectEmployee(emp.id);
     });
+  };
+
+  // Manejar cambio de página
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   if (collapsed) {
@@ -163,23 +195,39 @@ export default function EmployeeList() {
                 <Menu className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={handleSelectPage}>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 bg-white border-gray-200 shadow-lg"
+            >
+              <DropdownMenuItem
+                onClick={handleSelectPage} // Esto ahora selecciona los 10 de la página actual
+                className="hover:bg-gray-100"
+              >
                 <Check className="mr-2 h-4 w-4" />
                 Seleccionar página
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDeselectPage}>
+              <DropdownMenuItem
+                onClick={handleDeselectPage} // Esto ahora deselecciona los 10 de la página actual
+                className="hover:bg-gray-100"
+              >
                 <X className="mr-2 h-4 w-4" />
                 Deseleccionar página
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={deselectAllEmployees}>
+              <DropdownMenuSeparator className="bg-gray-200" />
+              <DropdownMenuItem
+                onClick={deselectAllEmployees}
+                className="hover:bg-gray-100"
+              >
                 <X className="mr-2 h-4 w-4" />
                 Deseleccionar todo
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => selectAllEmployees(employees)}>
+              {/* Ojo: "Ver todo el listado" con selectAllEmployees(employees) podría ser confuso si solo queremos verlos y no seleccionarlos todos. Si solo es para ver sin seleccionar, habría que manejar un estado de "mostrar todos" y ajustar la paginación/filtrado para ese caso especial, o cambiar el texto. Si la intención es SELECCIONAR todos, el código actual es correcto.*/}
+              <DropdownMenuItem
+                onClick={() => selectAllEmployees(employees)}
+                className="hover:bg-gray-100"
+              >
                 <Eye className="mr-2 h-4 w-4" />
-                Ver todo el listado
+                Seleccionar todo el listado
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -198,7 +246,7 @@ export default function EmployeeList() {
       </div>
 
       <div className="p-4">
-        {/* Reemplazamos el input anterior con nuestro nuevo componente de búsqueda */}
+        {/* Componente de búsqueda con filtros */}
         <SearchFilter
           onFilterChange={handleFilterChange}
           departments={departments}
@@ -207,9 +255,9 @@ export default function EmployeeList() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {filteredEmployees.length > 0 ? (
+        {paginatedEmployees.length > 0 ? (
           <div className="divide-y divide-border">
-            {filteredEmployees.map((employee) => (
+            {paginatedEmployees.map((employee) => (
               <EmployeeItem key={employee.id} employee={employee} />
             ))}
           </div>
@@ -222,12 +270,14 @@ export default function EmployeeList() {
         )}
       </div>
 
-      <div className="p-3 border-t border-border text-xs text-muted-foreground">
-        {selectedEmployees.length} empleados seleccionados
-        {filteredEmployees.length !== employees.length && (
-          <span> • {filteredEmployees.length} en filtro</span>
-        )}
-      </div>
+      {/* Componente de paginación (siempre visible) */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+        totalItems={filteredEmployees.length} // Cambiado a filteredEmployees.length para reflejar el total DENTRO de los filtros
+        selectedItems={selectedEmployees.length}
+      />
     </div>
   );
 }

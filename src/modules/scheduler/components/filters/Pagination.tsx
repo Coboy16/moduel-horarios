@@ -1,12 +1,13 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  totalItems?: number;
-  selectedItems?: number;
+  totalItems: number;
+  selectedItems: number;
 }
 
 export default function Pagination({
@@ -29,8 +30,9 @@ export default function Pagination({
   };
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 border-t border-border text-sm">
-      <div className="flex items-center gap-2">
+    <div className="border-t border-border">
+      {/* Fila 1: navegación */}
+      <div className="flex items-center justify-between p-2 border-b border-border">
         <Button
           variant="ghost"
           size="icon"
@@ -56,12 +58,12 @@ export default function Pagination({
         </Button>
       </div>
 
-      {selectedItems !== undefined && totalItems !== undefined && (
-        <div className="text-xs text-muted-foreground flex items-center">
+      {/* Fila 2: texto de selección */}
+      <div className="flex items-center justify-center p-2 cursor-pointer select-none">
+        <div className="text-sm text-muted-foreground">
           Seleccionados: {selectedItems} de {totalItems}
-          <ChevronRight className="h-3 w-3 ml-1 rotate-90" />
         </div>
-      )}
+      </div>
     </div>
   );
 }
