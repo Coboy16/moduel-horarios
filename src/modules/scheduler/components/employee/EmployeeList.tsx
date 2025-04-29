@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, SetStateAction } from "react";
 import { useEmployees } from "../../hooks/useEmployees";
 import { useUI } from "../../hooks/useUI";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+// import SearchFilter from "./SearchFilter"; // Importamos nuestro nuevo componente
 
 import {
-  Search,
   Users,
   ChevronLeft,
   ChevronRight,
@@ -24,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import SearchFilter from "../filters/SearchFilter";
 
 export default function EmployeeList() {
   const {
@@ -36,36 +36,69 @@ export default function EmployeeList() {
 
   const { openManageEmployeesModal } = useUI();
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [positionFilter, setPositionFilter] = useState("all");
+  const [searchFilters, setSearchFilters] = useState({
+    search: [] as string[],
+    departments: [] as string[],
+    positions: [] as string[],
+  });
   const [collapsed, setCollapsed] = useState(false);
 
-  // Filter employees based on search term and filters
-  const filteredEmployees = employees.filter((emp) => {
-    // Apply search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      if (
-        !emp.name.toLowerCase().includes(term) &&
-        !emp.department.toLowerCase().includes(term)
-      ) {
-        return false;
+  // Extraer departamentos y posiciones únicas de los empleados para los filtros
+  const departments = useMemo(() => {
+    const deptSet = new Set(employees.map((emp) => emp.department));
+    return Array.from(deptSet);
+  }, [employees]);
+
+  const positions = useMemo(() => {
+    const posSet = new Set(employees.map((emp) => emp.position));
+    return Array.from(posSet);
+  }, [employees]);
+
+  // Filtrar empleados basado en los criterios de búsqueda
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      // Filtrar por términos de búsqueda (nombre u otros campos de texto)
+      if (searchFilters.search.length > 0) {
+        const matchesSearch = searchFilters.search.some((term) => {
+          const termLower = term.toLowerCase();
+          return (
+            emp.name.toLowerCase().includes(termLower) ||
+            emp.department.toLowerCase().includes(termLower) ||
+            emp.position.toLowerCase().includes(termLower)
+          );
+        });
+
+        if (!matchesSearch) return false;
       }
-    }
 
-    // Apply department filter
-    if (departmentFilter !== "all" && emp.department !== departmentFilter) {
-      return false;
-    }
+      // Filtrar por departamentos
+      if (searchFilters.departments.length > 0) {
+        if (!searchFilters.departments.includes(emp.department)) {
+          return false;
+        }
+      }
 
-    // Apply position filter
-    if (positionFilter !== "all" && emp.position !== positionFilter) {
-      return false;
-    }
+      // Filtrar por posiciones
+      if (searchFilters.positions.length > 0) {
+        if (!searchFilters.positions.includes(emp.position)) {
+          return false;
+        }
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [employees, searchFilters]);
+
+  // Manejar cambios en los filtros
+  const handleFilterChange = (
+    filters: SetStateAction<{
+      search: string[];
+      departments: string[];
+      positions: string[];
+    }>
+  ) => {
+    setSearchFilters(filters);
+  };
 
   // Función para seleccionar todos los empleados filtrados
   const handleSelectPage = () => {
@@ -106,8 +139,13 @@ export default function EmployeeList() {
     );
   }
 
+  const hasActiveFilters =
+    searchFilters.search.length > 0 ||
+    searchFilters.departments.length > 0 ||
+    searchFilters.positions.length > 0;
+
   return (
-    <div className="w-[300px] border-r border-border flex flex-col">
+    <div className="w-[320px] border-r border-border flex flex-col">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4" />
@@ -159,16 +197,13 @@ export default function EmployeeList() {
         </div>
       </div>
 
-      <div className="p-4 space-y-3">
-        <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar empleados..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
-        </div>
+      <div className="p-4">
+        {/* Reemplazamos el input anterior con nuestro nuevo componente de búsqueda */}
+        <SearchFilter
+          onFilterChange={handleFilterChange}
+          departments={departments}
+          positions={positions}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -180,13 +215,18 @@ export default function EmployeeList() {
           </div>
         ) : (
           <div className="p-4 text-center text-muted-foreground">
-            No se encontraron empleados
+            {hasActiveFilters
+              ? "No se encontraron empleados con los filtros aplicados"
+              : "No se encontraron empleados"}
           </div>
         )}
       </div>
 
       <div className="p-3 border-t border-border text-xs text-muted-foreground">
         {selectedEmployees.length} empleados seleccionados
+        {filteredEmployees.length !== employees.length && (
+          <span> • {filteredEmployees.length} en filtro</span>
+        )}
       </div>
     </div>
   );

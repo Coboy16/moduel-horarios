@@ -1,15 +1,12 @@
 "use client";
 
-import type React from "react";
-
 import { useState } from "react";
 import { useFilters } from "../../hooks/useFilters";
 import { useEvents } from "../../hooks/useEvents";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Calendar } from "../ui/calendar";
-import { Search, CalendarIcon, Filter, X } from "lucide-react";
+import { CalendarIcon, Filter, X } from "lucide-react";
 import { formatDateRange } from "../../utils/dateUtils";
 
 export default function FilterBar() {
@@ -24,14 +21,7 @@ export default function FilterBar() {
 
   const { eventTypes } = useEvents();
 
-  const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Implement search functionality
-    console.log("Searching for:", searchTerm);
-  };
 
   return (
     <div className="p-4 border-b border-border bg-card">
@@ -63,16 +53,6 @@ export default function FilterBar() {
               />
             </PopoverContent>
           </Popover>
-
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 w-[200px]"
-            />
-          </form>
         </div>
 
         <div className="flex items-center gap-2">
