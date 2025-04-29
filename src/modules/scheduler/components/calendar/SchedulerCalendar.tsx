@@ -199,7 +199,9 @@ export default function SchedulerCalendar() {
             variant="ghost"
             size="icon"
             onClick={navigatePrevious}
-            aria-label="Periodo anterior"
+            aria-label={
+              currentView === "timeline" ? "Día anterior" : "Mes anterior"
+            }
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -210,7 +212,9 @@ export default function SchedulerCalendar() {
             variant="ghost"
             size="icon"
             onClick={navigateNext}
-            aria-label="Periodo siguiente"
+            aria-label={
+              currentView === "timeline" ? "Día siguiente" : "Mes siguiente"
+            }
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

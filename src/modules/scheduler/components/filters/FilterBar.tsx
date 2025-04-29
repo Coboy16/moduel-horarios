@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFilters } from "../../hooks/useFilters";
 import { useEvents } from "../../hooks/useEvents";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { CalendarIcon, Filter, X } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 import { formatDateRange } from "../../utils/dateUtils";
 import CalendarNew from "../calendar/CalendarNew";
 
@@ -16,13 +16,32 @@ export default function FilterBar() {
     setDateRange,
     eventTypeFilters,
     toggleEventTypeFilter,
-    resetFilters,
     setCurrentView,
   } = useFilters();
 
   const { eventTypes } = useEvents();
 
-  const [showFilters, setShowFilters] = useState(false);
+  const [showTurnos, setShowTurnos] = useState(false);
+  const [showLicencias, setShowLicencias] = useState(false);
+
+  // Emitir evento cuando cambia el estado de los paneles
+  useEffect(() => {
+    // Emitir evento personalizado para que el componente principal sepa que turnos ha cambiado
+    window.dispatchEvent(
+      new CustomEvent("turnos-toggle", {
+        detail: { show: showTurnos },
+      })
+    );
+  }, [showTurnos]);
+
+  useEffect(() => {
+    // Emitir evento personalizado para que el componente principal sepa que licencias ha cambiado
+    window.dispatchEvent(
+      new CustomEvent("licencias-toggle", {
+        detail: { show: showLicencias },
+      })
+    );
+  }, [showLicencias]);
 
   // Función para manejar el cambio de rango de fechas
   const handleDateRangeChange = (
@@ -82,50 +101,51 @@ export default function FilterBar() {
           </Popover>
         </div>
 
-        {/* <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setShowFilters(!showFilters)}
-            className={showFilters ? "bg-accent" : ""}
+            variant={!showTurnos ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setShowTurnos(!showTurnos);
+            }}
           >
-            <Filter className="h-4 w-4" />
+            TURNOS
           </Button>
 
           <Button
-            variant="ghost"
+            variant={!showLicencias ? "default" : "outline"}
             size="sm"
-            onClick={resetFilters}
-            className="text-muted-foreground"
+            onClick={() => {
+              setShowLicencias(!showLicencias);
+            }}
           >
-            <X className="h-4 w-4 mr-1" />
-            Limpiar filtros
+            LICENCIAS
           </Button>
-        </div> */}
+        </div>
       </div>
 
-      {showFilters && (
+      {eventTypeFilters.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           <div>
             <span className="text-sm font-medium mr-2">Tipos de eventos:</span>
             <div className="flex flex-wrap gap-1 mt-1">
-              {eventTypes.map((type) => (
-                <Button
-                  key={type.id}
-                  variant="outline"
-                  size="sm"
-                  className={`flex items-center gap-1 ${
-                    eventTypeFilters.includes(type.id) ? "bg-accent" : ""
-                  }`}
-                  onClick={() => toggleEventTypeFilter(type.id)}
-                >
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: type.color }}
-                  />
-                  {type.name}
-                </Button>
-              ))}
+              {eventTypes
+                .filter((type) => eventTypeFilters.includes(type.id))
+                .map((type) => (
+                  <Button
+                    key={type.id}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1 bg-accent"
+                    onClick={() => toggleEventTypeFilter(type.id)}
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: type.color }}
+                    />
+                    {type.name}
+                  </Button>
+                ))}
             </div>
           </div>
         </div>

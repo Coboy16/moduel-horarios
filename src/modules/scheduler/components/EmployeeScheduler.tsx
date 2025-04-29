@@ -22,6 +22,7 @@ import { useEmployees } from "../hooks/useEmployees";
 import EmployeeList from "./employee/EmployeeList";
 import SchedulerCalendar from "./calendar/SchedulerCalendar";
 import FilterBar from "./filters/FilterBar";
+
 import AddEventModal from "./modals/AddEventModal";
 import EditEventModal from "./modals/EditEventModal";
 import AddMarkingModal from "./modals/AddMarkingModal";
@@ -43,10 +44,13 @@ import {
   isDroppableTimelineRow,
   calculateTimeFromOffset,
   calculateTimeFromTimelineOffset,
-} from "../utils/dndUtils"; // NUEVO
-import type { Event } from "../interfaces/Event"; // NUEVO
-import { addHours, addMinutes, differenceInMinutes, set } from "date-fns"; // NUEVO
-import { useFilters } from "../hooks/useFilters"; // NUEVO
+} from "../utils/dndUtils";
+import type { Event } from "../interfaces/Event";
+import { addHours, addMinutes, differenceInMinutes, set } from "date-fns";
+import { useFilters } from "../hooks/useFilters";
+import MarcajesPanel from "./turnos_licencia/MarcajesPanel";
+import TurnosPanel from "./turnos_licencia/TurnosPanel";
+import LicenciasPanel from "./turnos_licencia/LicenciaPanel";
 
 export default function EmployeeScheduler() {
   const {
@@ -64,16 +68,50 @@ export default function EmployeeScheduler() {
     contextMenuData,
     closeContextMenu,
   } = useUI();
-  const { addEvent, updateEvent, getEventById } = useEvents(); // NUEVO
-  const { getEmployeeById } = useEmployees(); // NUEVO
-  const { currentView } = useFilters(); // NUEVO
+  const { addEvent, updateEvent, getEventById } = useEvents();
+  const { getEmployeeById } = useEmployees();
+  const { currentView } = useFilters();
 
-  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null); // NUEVO: ID del item arrastrado
-  const [activeDragItem, setActiveDragItem] = useState<Event | null>(null); // NUEVO: Datos del evento arrastrado (para overlay)
+  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  const [activeDragItem, setActiveDragItem] = useState<Event | null>(null);
   const [initialDragEventTimes, setInitialDragEventTimes] = useState<{
     start: Date;
     end: Date;
-  } | null>(null); // NUEVO: Para resize
+  } | null>(null);
+
+  // Estado para mostrar/ocultar paneles
+  const [showTurnos, setShowTurnos] = useState(false);
+  const [showLicencias, setShowLicencias] = useState(false);
+
+  // Escuchar eventos de activación/desactivación de paneles desde FilterBar
+  useEffect(() => {
+    // Esta función será llamada por FilterBar cuando se active/desactive turnos
+    const handleTurnosToggle = (event: CustomEvent) => {
+      setShowTurnos(event.detail.show);
+    };
+
+    // Esta función será llamada por FilterBar cuando se active/desactive licencias
+    const handleLicenciasToggle = (event: CustomEvent) => {
+      setShowLicencias(event.detail.show);
+    };
+
+    window.addEventListener("turnos-toggle" as any, handleTurnosToggle as any);
+    window.addEventListener(
+      "licencias-toggle" as any,
+      handleLicenciasToggle as any
+    );
+
+    return () => {
+      window.removeEventListener(
+        "turnos-toggle" as any,
+        handleTurnosToggle as any
+      );
+      window.removeEventListener(
+        "licencias-toggle" as any,
+        handleLicenciasToggle as any
+      );
+    };
+  }, []);
 
   // Configuración de sensores para dnd-kit
   const sensors = useSensors(
@@ -395,7 +433,7 @@ export default function EmployeeScheduler() {
         setInitialDragEventTimes(null);
       }
     },
-    [addEvent, updateEvent, getEmployeeById, initialDragEventTimes, currentView] // Dependencias
+    [addEvent, updateEvent, getEmployeeById, initialDragEventTimes, currentView]
   );
 
   // ------ Renderizado del Overlay ------
@@ -452,41 +490,45 @@ export default function EmployeeScheduler() {
       }
     }
 
-    // Podrías tener overlays diferentes para sidebar items si quieres
-    // if (isDraggableSidebarItem(activeData)) {
-    //    return <div className="p-2 bg-blue-200 rounded shadow">Arrastrando: {activeData.itemData.name}</div>;
-    // }
-
     return null;
   };
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter} // O `rectIntersection` dependiendo de la necesidad
+      collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragMove={handleDragMove}
-      // onDragOver={handleDragOver} // Opcional para feedback en tiempo real
     >
-      <div className="flex h-screen">
-        {" "}
+      <div className="flex flex-col h-screen">
         {/* Contenedor principal con altura completa */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {" "}
           {/* Contenedor para FilterBar y el resto */}
           <FilterBar />
           <div className="flex flex-1 overflow-hidden">
-            {" "}
-            {/* Contenedor para EmployeeList, Calendar y Panel */}
+            {/* Contenedor para EmployeeList y Calendar */}
             <EmployeeList />
             <div className="flex-1 flex flex-col overflow-hidden">
-              {" "}
               {/* Contenedor del calendario */}
               <SchedulerCalendar />
             </div>
           </div>
         </div>
+
+        {/* Panel de marcajes (siempre visible) */}
+        <MarcajesPanel />
+
+        {/* Contenedor para paneles de turnos y licencias */}
+        {(showTurnos || showLicencias) && (
+          <div className="w-full clearfix">
+            {/* Panel de turnos (mostrado condicionalmente) */}
+            {showTurnos && <TurnosPanel />}
+
+            {/* Panel de licencias (mostrado condicionalmente) */}
+            {showLicencias && <LicenciasPanel />}
+          </div>
+        )}
       </div>
 
       {/* Modals */}
@@ -501,8 +543,6 @@ export default function EmployeeScheduler() {
       {/* Context Menu */}
       {showContextMenu && (
         <div data-contextmenu-trigger>
-          {" "}
-          {/* Evita que click dentro cierre el menú */}
           <ContextMenu
             position={contextMenuPosition}
             type={contextMenuType}
