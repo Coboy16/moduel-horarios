@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react"; // Añadido useRef
+import { useState, useEffect, useRef } from "react"; // Añadido useRef
 import { useFilters } from "../../hooks/useFilters";
 import { Button } from "../ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
@@ -29,7 +29,7 @@ export default function SchedulerCalendar() {
   const { selectedEmployees } = useEmployees();
   const { events } = useEvents();
   const { markings } = useMarkings();
-  const calendarContainerRef = useRef<HTMLDivElement>(null); // Referencia al contenedor del calendario
+  const calendarContainerRef = useRef<HTMLDivElement>(null);
   const [calendarWidth, setCalendarWidth] = useState(0);
   const [calendarHeight, setCalendarHeight] = useState(0);
 
@@ -68,7 +68,7 @@ export default function SchedulerCalendar() {
         resizeObserver.unobserve(calendarContainerRef.current);
       }
     };
-  }, []); // Dependencia vacía para ejecutar solo al montar/desmontar listeners
+  }, []);
 
   // Ajustar el cálculo de la fecha de inicio/fin de semana
   const getWeekRange = (date: Date): { start: Date; end: Date } => {
@@ -209,10 +209,11 @@ export default function SchedulerCalendar() {
         {/* Selector de Vistas */}
         <Tabs
           value={currentView}
-          onValueChange={(value) =>
+          onValueChange={(value: string) =>
             setCurrentView(value as "day" | "week" | "month" | "timeline")
           }
           className="w-auto"
+          defaultValue="timeline"
         >
           <TabsList>
             <TabsTrigger value="day">Día</TabsTrigger>
@@ -234,7 +235,7 @@ export default function SchedulerCalendar() {
             {currentView === "day" && selectedEmployees.length > 0 && (
               <DayView
                 startDate={dateRange.start}
-                endDate={dateRange.end} // Aunque sea vista de día, pasamos el rango por consistencia
+                endDate={dateRange.end}
                 events={events}
                 markings={markings}
                 employees={selectedEmployees}
@@ -254,17 +255,10 @@ export default function SchedulerCalendar() {
               />
             )}
             {currentView === "month" && selectedEmployees.length > 0 && (
-              <MonthView
-                startDate={dateRange.start}
-                endDate={dateRange.end}
-                // MonthView podría no necesitar width/height directamente si usa CSS grid
-                // Pero podrías pasarlo si es necesario para cálculos internos
-              />
+              <MonthView startDate={dateRange.start} endDate={dateRange.end} />
             )}
-            {currentView === "timeline" && selectedEmployees.length > 0 && (
+            {currentView === "timeline" && (
               <TimelineView
-                // Timeline View usualmente muestra un solo día a la vez
-                // Usa dateRange.start como la fecha a mostrar
                 currentDate={dateRange.start}
                 events={events}
                 markings={markings}
@@ -273,8 +267,8 @@ export default function SchedulerCalendar() {
                 containerHeight={calendarHeight}
               />
             )}
-            {/* Mensaje si no hay empleados seleccionados */}
-            {selectedEmployees.length === 0 && (
+            {/* Mensaje si no hay empleados seleccionados y no estamos en timeline */}
+            {selectedEmployees.length === 0 && currentView !== "timeline" && (
               <div className="p-10 text-center text-muted-foreground">
                 Selecciona al menos un empleado para ver el calendario.
               </div>

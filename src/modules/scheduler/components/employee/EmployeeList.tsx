@@ -5,19 +5,35 @@ import { useEmployees } from "../../hooks/useEmployees";
 import { useUI } from "../../hooks/useUI";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import { Search, Users, ChevronLeft, ChevronRight } from "lucide-react";
+  Search,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  Check,
+  X,
+  Eye,
+} from "lucide-react";
 import EmployeeItem from "./EmployeeItem";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 export default function EmployeeList() {
-  const { employees, departments, positions, selectedEmployees } =
-    useEmployees();
+  const {
+    employees,
+    selectedEmployees,
+    deselectEmployee,
+    selectAllEmployees,
+    deselectAllEmployees,
+  } = useEmployees();
+
   const { openManageEmployeesModal } = useUI();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,6 +67,19 @@ export default function EmployeeList() {
     return true;
   });
 
+  // Función para seleccionar todos los empleados filtrados
+  const handleSelectPage = () => {
+    selectAllEmployees(filteredEmployees);
+  };
+
+  // Función para deseleccionar todos los empleados filtrados
+  const handleDeselectPage = () => {
+    // Deseleccionar solo los empleados que están en la lista filtrada actual
+    filteredEmployees.forEach((emp) => {
+      deselectEmployee(emp.id);
+    });
+  };
+
   if (collapsed) {
     return (
       <div className="w-12 border-r border-border flex flex-col items-center py-4">
@@ -80,11 +109,43 @@ export default function EmployeeList() {
   return (
     <div className="w-[300px] border-r border-border flex flex-col">
       <div className="p-4 border-b border-border flex items-center justify-between">
-        <h2 className="font-medium flex items-center gap-2">
-          <Users className="h-4 w-4" />
-          Empleados
-        </h2>
         <div className="flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          <h2 className="font-medium">Empleados</h2>
+          <div className="flex items-center justify-center w-5 h-5 bg-purple-600 text-white text-xs rounded-full">
+            {selectedEmployees.length}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* Dropdown de acciones para selección */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Menu className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={handleSelectPage}>
+                <Check className="mr-2 h-4 w-4" />
+                Seleccionar página
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDeselectPage}>
+                <X className="mr-2 h-4 w-4" />
+                Deseleccionar página
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={deselectAllEmployees}>
+                <X className="mr-2 h-4 w-4" />
+                Deseleccionar todo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => selectAllEmployees(employees)}>
+                <Eye className="mr-2 h-4 w-4" />
+                Ver todo el listado
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="ghost"
             size="icon"
@@ -107,36 +168,6 @@ export default function EmployeeList() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8"
           />
-        </div>
-
-        <div className="flex gap-2">
-          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger className="flex-1 h-9">
-              <SelectValue placeholder="Departamento" />
-            </SelectTrigger>
-            <SelectContent className="bg-white">
-              <SelectItem value="all">Todos los departamentos</SelectItem>
-              {departments.map((dept) => (
-                <SelectItem key={dept} value={dept}>
-                  {dept}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={positionFilter} onValueChange={setPositionFilter}>
-            <SelectTrigger className="flex-1 h-9">
-              <SelectValue placeholder="Posición" />
-            </SelectTrigger>
-            <SelectContent className="bg-white">
-              <SelectItem value="all">Todas las posiciones</SelectItem>
-              {positions.map((pos) => (
-                <SelectItem key={pos} value={pos}>
-                  {pos}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
 

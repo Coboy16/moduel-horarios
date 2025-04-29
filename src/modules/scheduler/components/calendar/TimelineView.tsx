@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useRef } from "react";
-import { useDroppable } from "@dnd-kit/core"; // NUEVO
+import { useRef } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import { useUI } from "../../hooks/useUI";
 import type { Employee } from "../../interfaces/Employee";
 import type { Event } from "../../interfaces/Event";
@@ -9,7 +9,8 @@ import type { Marking } from "../../interfaces/Marking";
 import { formatTime, isSameDay, formatDate } from "../../utils/dateUtils";
 import TimelineEventItem from "./TimelineEventItem";
 import TimelineMarkingPin from "./TimelineMarkingPin";
-import { useCalculatePosition } from "../../hooks/useCalculatePosition"; // NUEVO
+import { useCalculatePosition } from "../../hooks/useCalculatePosition";
+import { useEmployees } from "../../hooks/useEmployees";
 
 interface TimelineViewProps {
   currentDate: Date; // Cambiado de dateRange a currentDate
@@ -22,31 +23,39 @@ interface TimelineViewProps {
 
 // Constantes de la vista
 const EMPLOYEE_COL_WIDTH = 200;
-const HEADER_HEIGHT = 40; // Altura de la cabecera de horas
-const HOUR_WIDTH = 80; // Ancho de cada hora
-const ROW_HEIGHT = 60; // Altura de cada fila de empleado
+const HEADER_HEIGHT = 40;
+const HOUR_WIDTH = 80;
+const ROW_HEIGHT = 60;
 
 export default function TimelineView({
   currentDate,
   events,
   markings,
-  employees,
+  employees: selectedEmployees, // Renombramos para claridad
   containerWidth,
   containerHeight,
 }: TimelineViewProps) {
   const { openContextMenu } = useUI();
-  // const { dateRange } = useFilters() // Ya no se necesita aquí, usamos currentDate
+  const { employees: allEmployees } = useEmployees(); // Obtenemos todos los empleados
   const gridRef = useRef<HTMLDivElement>(null);
 
+  // Determinar qué empleados mostrar:
+  // - Si hay empleados seleccionados, mostrar solo esos
+  // - Si no hay seleccionados, mostrar los primeros 10
+  const displayEmployees =
+    selectedEmployees.length > 0
+      ? selectedEmployees
+      : allEmployees.slice(0, 10);
+
   const gridHeight = containerHeight - HEADER_HEIGHT;
-  const totalTimelineWidth = 24 * HOUR_WIDTH; // Ancho total de 24 horas
+  const totalTimelineWidth = 24 * HOUR_WIDTH;
 
   // Hook para calcular posiciones
   const { getEventPosition, getMarkingPosition } = useCalculatePosition({
     view: "timeline",
-    startDate: currentDate, // Usamos currentDate como referencia
+    startDate: currentDate,
     endDate: currentDate,
-    employees,
+    employees: displayEmployees, // Usamos los empleados que mostraremos
     containerWidth,
     containerHeight,
     timelineHourWidth: HOUR_WIDTH,
@@ -57,17 +66,28 @@ export default function TimelineView({
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  // Filtrar eventos y marcajes para el día actual
+  // Filtrar eventos y marcajes para el día actual y los empleados que se muestran
   const dayEvents = events.filter((event) => {
+    // Solo incluir eventos de los empleados que estamos mostrando
+    if (!displayEmployees.some((emp) => emp.id === event.employeeId)) {
+      return false;
+    }
+
     const eventStart = new Date(event.startTime);
     return (
       isSameDay(eventStart, currentDate) ||
       (eventStart < currentDate && new Date(event.endTime) > currentDate)
     );
   });
-  const dayMarkings = markings.filter((marking) =>
-    isSameDay(new Date(marking.time), currentDate)
-  );
+
+  const dayMarkings = markings.filter((marking) => {
+    // Solo incluir marcajes de los empleados que estamos mostrando
+    if (!displayEmployees.some((emp) => emp.id === marking.employeeId)) {
+      return false;
+    }
+
+    return isSameDay(new Date(marking.time), currentDate);
+  });
 
   // Manejar clic derecho en la fila de un empleado para añadir
   const handleTimelineContextMenu = (
@@ -80,7 +100,7 @@ export default function TimelineView({
     const gridRect = gridRef.current?.getBoundingClientRect();
     if (!gridRect) return;
 
-    const offsetX = e.clientX - gridRect.left - EMPLOYEE_COL_WIDTH; // Offset relativo al inicio de la timeline
+    const offsetX = e.clientX - gridRect.left - EMPLOYEE_COL_WIDTH;
     const hourDecimal = offsetX / HOUR_WIDTH;
     const hour = Math.floor(hourDecimal);
     const minute = Math.floor((hourDecimal % 1) * 60);
@@ -90,14 +110,13 @@ export default function TimelineView({
     const clickTime = new Date(currentDate);
     clickTime.setHours(hour, minute, 0, 0);
 
-    openContextMenu(
-      { x: e.clientX, y: e.clientY },
-      "timeline", // O podría ser "cell" si la lógica del menú es la misma
-      { date: clickTime, employeeId }
-    );
+    openContextMenu({ x: e.clientX, y: e.clientY }, "timeline", {
+      date: clickTime,
+      employeeId,
+    });
   };
 
-  // --- Componente Interno para Fila Droppable ---
+  // Componente interno para filas droppables
   interface DroppableRowProps {
     employeeId: string;
     employeeIndex: number;
@@ -112,10 +131,10 @@ export default function TimelineView({
       data: {
         type: "timelineRow",
         employeeId: employeeId,
-        date: currentDate, // Pasar la fecha actual
+        date: currentDate,
         gridInfo: {
           hourWidth: HOUR_WIDTH,
-          rowLeftOffset: EMPLOYEE_COL_WIDTH, // El inicio del área droppable está después de la columna de empleados
+          rowLeftOffset: EMPLOYEE_COL_WIDTH,
         },
       },
     });
@@ -126,7 +145,7 @@ export default function TimelineView({
         className={`border-b border-border relative ${
           isOver ? "bg-blue-100/50" : ""
         }`}
-        style={{ height: `${ROW_HEIGHT}px`, width: `${totalTimelineWidth}px` }} // Ancho total de 24h
+        style={{ height: `${ROW_HEIGHT}px`, width: `${totalTimelineWidth}px` }}
         onContextMenu={(e) => handleTimelineContextMenu(e, employeeId)}
       >
         {/* Marcadores de Hora */}
@@ -160,12 +179,9 @@ export default function TimelineView({
       </div>
     );
   };
-  // --- Fin Componente Interno ---
 
   return (
     <div className="h-full overflow-auto" ref={gridRef}>
-      {" "}
-      {/* Ref en el contenedor scrollable */}
       <div
         className="relative"
         style={{
@@ -173,8 +189,6 @@ export default function TimelineView({
           width: `${EMPLOYEE_COL_WIDTH + totalTimelineWidth}px`,
         }}
       >
-        {" "}
-        {/* Ancho total */}
         {/* Cabecera Fija (Empleados y Horas) */}
         <div className="sticky top-0 z-30 flex bg-white">
           {/* Esquina superior izquierda */}
@@ -226,7 +240,7 @@ export default function TimelineView({
               height: `${gridHeight}px`,
             }}
           >
-            {employees.map((employee) => (
+            {displayEmployees.map((employee) => (
               <div
                 key={employee.id}
                 className="border-b border-r border-border p-2 flex flex-col justify-center"
@@ -244,14 +258,14 @@ export default function TimelineView({
 
           {/* Filas de Timeline (Scrollable Horizontalmente) */}
           <div
-            className="absolute top-0 z-10" // Cambiado a z-10 para estar detrás de los items
+            className="absolute top-0 z-10"
             style={{
               left: `${EMPLOYEE_COL_WIDTH}px`,
               width: `${totalTimelineWidth}px`,
               height: `${gridHeight}px`,
             }}
           >
-            {employees.map((employee, index) => (
+            {displayEmployees.map((employee, index) => (
               <DroppableRow
                 key={`row-${employee.id}`}
                 employeeId={employee.id}
@@ -259,14 +273,11 @@ export default function TimelineView({
               />
             ))}
 
-            {/* --- Renderizar Eventos y Marcajes encima de las filas --- */}
+            {/* Renderizar Eventos y Marcajes encima de las filas */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
-              {" "}
-              {/* Contenedor para items, Z-index mayor */}
               {dayEvents.map((event) => {
                 const position = getEventPosition(event);
                 if (!position) return null;
-                // Quitamos position:absolute porque ya está en contenedor absoluto
                 const itemStyle = {
                   ...position,
                   position: undefined,

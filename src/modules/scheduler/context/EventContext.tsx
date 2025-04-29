@@ -1,6 +1,6 @@
 "use client";
 
-import type React from "react";
+import type { FC, ReactNode } from "react";
 import { createContext, useState, useCallback, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { Event } from "../interfaces/Event";
@@ -50,9 +50,7 @@ export const EventContext = createContext<EventContextProps>(
   {} as EventContextProps
 );
 
-export const EventProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const EventProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [events, setEvents] = useState<Event[]>([]);
   const [eventTypes, setEventTypes] = useState<
     {

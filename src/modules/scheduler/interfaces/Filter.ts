@@ -1,6 +1,6 @@
-export type CalendarView = "day" | "week" | "month" | "timeline"
+export type CalendarView = "day" | "week" | "month" | "timeline";
 
 export interface DateRange {
-  start: Date
-  end: Date
+  start: Date;
+  end: Date;
 }

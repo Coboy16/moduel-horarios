@@ -1,19 +1,31 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useUI } from "../../hooks/useUI"
-import { useEmployees } from "../../hooks/useEmployees"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Checkbox } from "../ui/checkbox"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog"
-import { X, Search } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
+import { useState } from "react";
+import { useUI } from "../../hooks/useUI";
+import { useEmployees } from "../../hooks/useEmployees";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Checkbox } from "../ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import { X, Search } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
-type ManageEmployeesModalProps = {}
+type ManageEmployeesModalProps = {};
 
 export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
-  const { closeManageEmployeesModal } = useUI()
+  const { closeManageEmployeesModal } = useUI();
   const {
     employees,
     selectedEmployees,
@@ -23,54 +35,57 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
     deselectAllEmployees,
     departments,
     positions,
-  } = useEmployees()
+  } = useEmployees();
 
-  const [searchTerm, setSearchTerm] = useState("")
-  const [departmentFilter, setDepartmentFilter] = useState("all")
-  const [positionFilter, setPositionFilter] = useState("all")
+  const [searchTerm, setSearchTerm] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [positionFilter, setPositionFilter] = useState("all");
 
   // Filter employees based on search term and filters
   const filteredEmployees = employees.filter((emp) => {
     // Apply search filter
     if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      if (!emp.name.toLowerCase().includes(term) && !emp.department.toLowerCase().includes(term)) {
-        return false
+      const term = searchTerm.toLowerCase();
+      if (
+        !emp.name.toLowerCase().includes(term) &&
+        !emp.department.toLowerCase().includes(term)
+      ) {
+        return false;
       }
     }
 
     // Apply department filter
     if (departmentFilter !== "all" && emp.department !== departmentFilter) {
-      return false
+      return false;
     }
 
     // Apply position filter
     if (positionFilter !== "all" && emp.position !== positionFilter) {
-      return false
+      return false;
     }
 
-    return true
-  })
+    return true;
+  });
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      selectAllEmployees(filteredEmployees)
+      selectAllEmployees(filteredEmployees);
     } else {
-      deselectAllEmployees()
+      deselectAllEmployees();
     }
-  }
+  };
 
   const isAllSelected =
-    filteredEmployees.length > 0 && filteredEmployees.every((emp) => selectedEmployees.some((sel) => sel.id === emp.id))
+    filteredEmployees.length > 0 &&
+    filteredEmployees.every((emp) =>
+      selectedEmployees.some((sel) => sel.id === emp.id)
+    );
 
   return (
     <Dialog open={true} onOpenChange={closeManageEmployeesModal}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Gestionar Empleados</DialogTitle>
-          <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={closeManageEmployeesModal}>
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -85,7 +100,10 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
           </div>
 
           <div className="flex gap-2">
-            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <Select
+              value={departmentFilter}
+              onValueChange={setDepartmentFilter}
+            >
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Departamento" />
               </SelectTrigger>
@@ -115,7 +133,11 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
           </div>
 
           <div className="flex items-center space-x-2">
-            <Checkbox id="selectAll" checked={isAllSelected} onCheckedChange={handleSelectAll} />
+            <Checkbox
+              id="selectAll"
+              checked={isAllSelected}
+              onCheckedChange={handleSelectAll}
+            />
             <label htmlFor="selectAll" className="text-sm">
               Seleccionar todos
             </label>
@@ -125,7 +147,9 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
             {filteredEmployees.length > 0 ? (
               <div className="divide-y divide-border">
                 {filteredEmployees.map((employee) => {
-                  const isSelected = selectedEmployees.some((e) => e.id === employee.id)
+                  const isSelected = selectedEmployees.some(
+                    (e) => e.id === employee.id
+                  );
 
                   return (
                     <div
@@ -138,34 +162,44 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
                         checked={isSelected}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            selectEmployee(employee)
+                            selectEmployee(employee);
                           } else {
-                            deselectEmployee(employee.id)
+                            deselectEmployee(employee.id);
                           }
                         }}
                         className="mr-3"
                       />
 
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{employee.name}</div>
+                        <div className="font-medium truncate">
+                          {employee.name}
+                        </div>
                         <div className="text-xs text-muted-foreground truncate">
                           {employee.department} • {employee.position}
                         </div>
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
             ) : (
-              <div className="p-4 text-center text-muted-foreground">No se encontraron empleados</div>
+              <div className="p-4 text-center text-muted-foreground">
+                No se encontraron empleados
+              </div>
             )}
           </div>
 
           <div className="flex justify-between items-center">
-            <div className="text-sm text-muted-foreground">{selectedEmployees.length} empleados seleccionados</div>
+            <div className="text-sm text-muted-foreground">
+              {selectedEmployees.length} empleados seleccionados
+            </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeManageEmployeesModal}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeManageEmployeesModal}
+              >
                 Cancelar
               </Button>
               <Button onClick={closeManageEmployeesModal}>Aplicar</Button>
@@ -174,5 +208,5 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
