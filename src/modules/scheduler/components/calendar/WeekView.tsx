@@ -1,252 +1,285 @@
-"use client";
+// "use client";
 
-import type React from "react";
-import { useRef } from "react";
-import { useUI } from "../../hooks/useUI";
-import { format, addDays, isSameDay } from "date-fns";
-import { es } from "date-fns/locale";
-import type { Employee } from "../../interfaces/Employee";
-import type { Event } from "../../interfaces/Event";
-import type { Marking } from "../../interfaces/Marking";
-import { formatTime } from "../../utils/dateUtils";
-import EventItem from "./EventItem";
-import MarkingPin from "./MarkingPin";
+// import { useRef } from "react";
+// import { useUI } from "../../hooks/useUI";
+// import { useFilters } from "../../hooks/useFilters"; // Añadido para acceder al dateRange
+// import { format, addDays, isSameDay, isWithinInterval } from "date-fns";
+// import { es } from "date-fns/locale";
+// import type { Employee } from "../../interfaces/Employee";
+// import type { Event } from "../../interfaces/Event";
+// import type { Marking } from "../../interfaces/Marking";
+// import { formatTime } from "../../utils/dateUtils";
+// import EventItem from "./EventItem";
+// import MarkingPin from "./MarkingPin";
 
-interface WeekViewProps {
-  startDate: Date;
-  endDate: Date;
-  events: Event[];
-  markings: Marking[];
-  employees: Employee[];
-  width: number;
-  height: number;
-}
+// interface WeekViewProps {
+//   startDate: Date;
+//   endDate: Date;
+//   events: Event[];
+//   markings: Marking[];
+//   employees: Employee[];
+//   containerWidth: number; // Cambié width por containerWidth para que coincida con el uso en SchedulerCalendar
+//   containerHeight: number; // Cambié height por containerHeight para que coincida con el uso en SchedulerCalendar
+// }
 
-export default function WeekView({
-  startDate,
-  endDate,
-  events,
-  markings,
-  employees,
-  width,
-  height,
-}: WeekViewProps) {
-  const { openContextMenu } = useUI();
-  const gridRef = useRef<HTMLDivElement>(null);
+// export default function WeekView({
+//   startDate,
+//   endDate,
+//   events,
+//   markings,
+//   employees,
+//   containerWidth,
+//   containerHeight,
+// }: WeekViewProps) {
+//   const { openContextMenu } = useUI();
+//   const { dateRange } = useFilters(); // Obtener el rango de fechas seleccionado
+//   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Hours to display
-  const startHour = 6;
-  const endHour = 22;
-  const hours = Array.from(
-    { length: endHour - startHour + 1 },
-    (_, i) => i + startHour
-  );
+//   // Hours to display
+//   const startHour = 6;
+//   const endHour = 22;
+//   const hours = Array.from(
+//     { length: endHour - startHour + 1 },
+//     (_, i) => i + startHour
+//   );
 
-  // Days of the week
-  const days = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
+//   // Days of the week
+//   const days = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
 
-  // Handle grid background context menu
-  const handleGridContextMenu = (
-    e: React.MouseEvent,
-    date: Date,
-    employeeId: string
-  ) => {
-    e.preventDefault();
+//   // Verificar si una fecha está dentro del rango seleccionado
+//   const isDateInSelectedRange = (date: Date) => {
+//     return isWithinInterval(date, {
+//       start: dateRange.start,
+//       end: dateRange.end,
+//     });
+//   };
 
-    // Calculate time from click position
-    const rect = gridRef.current?.getBoundingClientRect();
-    if (!rect) return;
+//   // Handle grid background context menu
+//   const handleGridContextMenu = (
+//     e: React.MouseEvent,
+//     date: Date,
+//     employeeId: string
+//   ) => {
+//     e.preventDefault();
 
-    const offsetY = e.clientY - rect.top;
-    const hourHeight = (height - 50) / (endHour - startHour + 1); // 50px for header
-    const hour = Math.floor(offsetY / hourHeight) + startHour;
-    const minute = Math.floor((offsetY % hourHeight) / (hourHeight / 60));
+//     // Calculate time from click position
+//     const rect = gridRef.current?.getBoundingClientRect();
+//     if (!rect) return;
 
-    if (hour < 0 || hour >= 24) return;
+//     const offsetY = e.clientY - rect.top;
+//     const hourHeight = (containerHeight - 50) / (endHour - startHour + 1); // 50px for header
+//     const hour = Math.floor(offsetY / hourHeight) + startHour;
+//     const minute = Math.floor((offsetY % hourHeight) / (hourHeight / 60));
 
-    const clickTime = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      hour,
-      minute
-    );
+//     if (hour < 0 || hour >= 24) return;
 
-    openContextMenu(
-      {
-        x: e.clientX,
-        y: e.clientY,
-      },
-      "cell",
-      {
-        date: clickTime,
-        employeeId,
-      }
-    );
-  };
+//     const clickTime = new Date(
+//       date.getFullYear(),
+//       date.getMonth(),
+//       date.getDate(),
+//       hour,
+//       minute
+//     );
 
-  // Position events in the grid
-  const getEventPosition = (event: Event) => {
-    const startTime = new Date(event.startTime);
-    const endTime = new Date(event.endTime);
+//     openContextMenu(
+//       {
+//         x: e.clientX,
+//         y: e.clientY,
+//       },
+//       "cell",
+//       {
+//         date: clickTime,
+//         employeeId,
+//       }
+//     );
+//   };
 
-    // Find which day of the week this event belongs to
-    const dayIndex = days.findIndex((day) => isSameDay(day, startTime));
-    if (dayIndex === -1) return null;
+//   // Position events in the grid
+//   const getEventPosition = (event: Event) => {
+//     const startTime = new Date(event.startTime);
+//     const endTime = new Date(event.endTime);
 
-    // If event spans multiple days, cap it to the current day
-    if (!isSameDay(startTime, endTime)) {
-      endTime.setHours(23, 59, 59, 999);
-    }
+//     // Find which day of the week this event belongs to
+//     const dayIndex = days.findIndex((day) => isSameDay(day, startTime));
+//     if (dayIndex === -1) return null;
 
-    const startHourDecimal = startTime.getHours() + startTime.getMinutes() / 60;
-    const endHourDecimal = endTime.getHours() + endTime.getMinutes() / 60;
+//     // If event spans multiple days, cap it to the current day
+//     if (!isSameDay(startTime, endTime)) {
+//       endTime.setHours(23, 59, 59, 999);
+//     }
 
-    const employeeIndex = employees.findIndex(
-      (emp) => emp.id === event.employeeId
-    );
-    if (employeeIndex === -1) return null;
+//     const startHourDecimal = startTime.getHours() + startTime.getMinutes() / 60;
+//     const endHourDecimal = endTime.getHours() + endTime.getMinutes() / 60;
 
-    const dayWidth = (width - 100) / days.length; // 100px for time column
-    const employeeHeight = (height - 50) / employees.length; // 50px for header
+//     const employeeIndex = employees.findIndex(
+//       (emp) => emp.id === event.employeeId
+//     );
+//     if (employeeIndex === -1) return null;
 
-    return {
-      left: `${dayIndex * dayWidth + 100}px`,
-      width: `${dayWidth - 10}px`,
-      top: `${
-        employeeIndex * employeeHeight +
-        (startHourDecimal - startHour) * 60 +
-        50
-      }px`,
-      height: `${(endHourDecimal - startHourDecimal) * 60}px`,
-    };
-  };
+//     const dayWidth = (containerWidth - 100) / days.length; // 100px for time column
+//     const employeeHeight = (containerHeight - 50) / employees.length; // 50px for header
 
-  // Position markings in the grid
-  const getMarkingPosition = (marking: Marking) => {
-    const markingTime = new Date(marking.time);
+//     return {
+//       left: `${dayIndex * dayWidth + 100}px`,
+//       width: `${dayWidth - 10}px`,
+//       top: `${
+//         employeeIndex * employeeHeight +
+//         (startHourDecimal - startHour) * 60 +
+//         50
+//       }px`,
+//       height: `${(endHourDecimal - startHourDecimal) * 60}px`,
+//     };
+//   };
 
-    // Find which day of the week this marking belongs to
-    const dayIndex = days.findIndex((day) => isSameDay(day, markingTime));
-    if (dayIndex === -1) return null;
+//   // Position markings in the grid
+//   const getMarkingPosition = (marking: Marking) => {
+//     const markingTime = new Date(marking.time);
 
-    const hourDecimal = markingTime.getHours() + markingTime.getMinutes() / 60;
+//     // Find which day of the week this marking belongs to
+//     const dayIndex = days.findIndex((day) => isSameDay(day, markingTime));
+//     if (dayIndex === -1) return null;
 
-    const employeeIndex = employees.findIndex(
-      (emp) => emp.id === marking.employeeId
-    );
-    if (employeeIndex === -1) return null;
+//     const hourDecimal = markingTime.getHours() + markingTime.getMinutes() / 60;
 
-    const dayWidth = (width - 100) / days.length; // 100px for time column
-    const employeeHeight = (height - 50) / employees.length; // 50px for header
+//     const employeeIndex = employees.findIndex(
+//       (emp) => emp.id === marking.employeeId
+//     );
+//     if (employeeIndex === -1) return null;
 
-    return {
-      left: `${dayIndex * dayWidth + 100 + dayWidth / 2}px`,
-      top: `${
-        employeeIndex * employeeHeight + (hourDecimal - startHour) * 60 + 50
-      }px`,
-    };
-  };
+//     const dayWidth = (containerWidth - 100) / days.length; // 100px for time column
+//     const employeeHeight = (containerHeight - 50) / employees.length; // 50px for header
 
-  return (
-    <div className="h-full overflow-auto">
-      <div className="relative" ref={gridRef}>
-        {/* Time column */}
-        <div className="absolute top-0 left-0 w-[100px] z-10">
-          <div className="h-[50px] border-b border-r border-border bg-white"></div>
-          {hours.map((hour) => (
-            <div
-              key={hour}
-              className="h-[60px] border-b border-r border-border p-2 text-sm text-right"
-            >
-              {formatTime(hour, 0)}
-            </div>
-          ))}
-        </div>
+//     return {
+//       left: `${dayIndex * dayWidth + 100 + dayWidth / 2}px`,
+//       top: `${
+//         employeeIndex * employeeHeight + (hourDecimal - startHour) * 60 + 50
+//       }px`,
+//     };
+//   };
 
-        {/* Day columns */}
-        <div className="ml-[100px]">
-          {/* Header row with day names */}
-          <div className="flex h-[50px] border-b border-border">
-            {days.map((day, index) => (
-              <div
-                key={index}
-                className="flex-1 border-r border-border p-2 font-medium truncate"
-                style={{ minWidth: `${(width - 100) / days.length}px` }}
-              >
-                {format(day, "EEE d", { locale: es })}
-              </div>
-            ))}
-          </div>
+//   return (
+//     <div className="h-full overflow-auto">
+//       <div className="relative" ref={gridRef}>
+//         {/* Time column */}
+//         <div className="absolute top-0 left-0 w-[100px] z-10">
+//           <div className="h-[50px] border-b border-r border-border bg-white"></div>
+//           {hours.map((hour) => (
+//             <div
+//               key={hour}
+//               className="h-[60px] border-b border-r border-border p-2 text-sm text-right"
+//             >
+//               {formatTime(hour, 0)}
+//             </div>
+//           ))}
+//         </div>
 
-          {/* Grid cells */}
-          <div className="flex">
-            {days.map((day, dayIndex) => (
-              <div
-                key={dayIndex}
-                className="flex-1 relative"
-                style={{ minWidth: `${(width - 100) / days.length}px` }}
-              >
-                {employees.map((employee, employeeIndex) => (
-                  <div
-                    key={employee.id}
-                    className="relative"
-                    style={{ height: `${(height - 50) / employees.length}px` }}
-                  >
-                    {hours.map((hour) => (
-                      <div
-                        key={hour}
-                        className="h-[60px] border-b border-r border-border"
-                        onContextMenu={(e) =>
-                          handleGridContextMenu(e, day, employee.id)
-                        }
-                      >
-                        {/* 15-minute markers */}
-                        {[15, 30, 45].map((minute) => (
-                          <div
-                            key={minute}
-                            className="absolute w-full border-b border-dashed border-border/30"
-                            style={{
-                              top: `${(hour - startHour) * 60 + minute}px`,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    ))}
+//         {/* Day columns */}
+//         <div className="ml-[100px]">
+//           {/* Header row with day names - Formato requerido para mostrar "28 de abril - 4 de mayo 2025" */}
+//           <div className="flex h-[50px] border-b border-border">
+//             <div className="w-full text-center font-medium py-3 border-b border-border bg-blue-50">
+//               {format(startDate, "d 'de' MMMM", { locale: es })} -{" "}
+//               {format(endDate, "d 'de' MMMM 'de' yyyy", { locale: es })}
+//             </div>
+//           </div>
 
-                    {/* Working hours background */}
-                    <div
-                      className="absolute left-0 right-0 bg-green-50"
-                      style={{
-                        top: `${(9 - startHour) * 60}px`,
-                        height: `${8 * 60}px`,
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
+//           {/* Días de la semana */}
+//           <div className="flex border-b border-border">
+//             {days.map((day, index) => (
+//               <div
+//                 key={index}
+//                 className={`flex-1 border-r border-border p-2 font-medium truncate ${
+//                   isDateInSelectedRange(day) ? "bg-blue-100" : ""
+//                 }`}
+//                 style={{
+//                   minWidth: `${(containerWidth - 100) / days.length}px`,
+//                 }}
+//               >
+//                 {format(day, "EEE d", { locale: es })}
+//               </div>
+//             ))}
+//           </div>
 
-        {/* Events */}
-        {events.map((event) => {
-          const position = getEventPosition(event);
-          if (!position) return null;
+//           {/* Grid cells */}
+//           <div className="flex">
+//             {days.map((day, dayIndex) => (
+//               <div
+//                 key={dayIndex}
+//                 className={`flex-1 relative ${
+//                   isDateInSelectedRange(day) ? "bg-blue-50/50" : ""
+//                 }`}
+//                 style={{
+//                   minWidth: `${(containerWidth - 100) / days.length}px`,
+//                 }}
+//               >
+//                 {employees.map((employee, employeeIndex) => (
+//                   <div
+//                     key={employee.id}
+//                     className="relative"
+//                     style={{
+//                       height: `${(containerHeight - 50) / employees.length}px`,
+//                     }}
+//                   >
+//                     {hours.map((hour) => (
+//                       <div
+//                         key={hour}
+//                         className={`h-[60px] border-b border-r border-border ${
+//                           isDateInSelectedRange(day) ? "bg-blue-50" : ""
+//                         }`}
+//                         onContextMenu={(e) =>
+//                           handleGridContextMenu(e, day, employee.id)
+//                         }
+//                       >
+//                         {/* 15-minute markers */}
+//                         {[15, 30, 45].map((minute) => (
+//                           <div
+//                             key={minute}
+//                             className="absolute w-full border-b border-dashed border-border/30"
+//                             style={{
+//                               top: `${(hour - startHour) * 60 + minute}px`,
+//                             }}
+//                           />
+//                         ))}
+//                       </div>
+//                     ))}
 
-          return <EventItem key={event.id} event={event} style={position} />;
-        })}
+//                     {/* Working hours background */}
+//                     <div
+//                       className={`absolute left-0 right-0 ${
+//                         isDateInSelectedRange(day)
+//                           ? "bg-green-100"
+//                           : "bg-green-50"
+//                       }`}
+//                       style={{
+//                         top: `${(9 - startHour) * 60}px`,
+//                         height: `${8 * 60}px`,
+//                       }}
+//                     />
+//                   </div>
+//                 ))}
+//               </div>
+//             ))}
+//           </div>
+//         </div>
 
-        {/* Markings */}
-        {markings.map((marking) => {
-          const position = getMarkingPosition(marking);
-          if (!position) return null;
+//         {/* Events */}
+//         {events.map((event) => {
+//           const position = getEventPosition(event);
+//           if (!position) return null;
 
-          return (
-            <MarkingPin key={marking.id} marking={marking} style={position} />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+//           return <EventItem key={event.id} event={event} style={position} />;
+//         })}
+
+//         {/* Markings */}
+//         {markings.map((marking) => {
+//           const position = getMarkingPosition(marking);
+//           if (!position) return null;
+
+//           return (
+//             <MarkingPin key={marking.id} marking={marking} style={position} />
+//           );
+//         })}
+//       </div>
+//     </div>
+//   );
+// }

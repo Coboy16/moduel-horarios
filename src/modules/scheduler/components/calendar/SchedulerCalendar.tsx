@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react"; // Añadido useRef
+import { useState, useEffect, useRef } from "react";
 import { useFilters } from "../../hooks/useFilters";
 import { Button } from "../ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import WeekView from "./WeekView";
+// import WeekView from "./WeekView";
 import MonthView from "./MonthView";
 import TimelineView from "./TimelineView";
 import CalendarHeader from "./CalendarHeader";
@@ -21,7 +21,7 @@ import {
   subWeeks,
   startOfWeek,
   endOfWeek,
-} from "date-fns"; // Añadido startOfWeek, endOfWeek
+} from "date-fns";
 
 export default function SchedulerCalendar() {
   const { currentView, dateRange, setDateRange, setCurrentView } = useFilters();
@@ -68,6 +68,9 @@ export default function SchedulerCalendar() {
       }
     };
   }, []);
+
+  // Eliminamos el useEffect que causaba el bucle
+  // Ahora manejamos el cambio de vista solo desde el FilterBar cuando se selecciona un rango
 
   // Ajustar el cálculo de la fecha de inicio/fin de semana
   const getWeekRange = (date: Date): { start: Date; end: Date } => {
@@ -181,9 +184,6 @@ export default function SchedulerCalendar() {
       >
         {/* Controles de Navegación */}
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={navigateToday}>
-            Hoy
-          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -191,6 +191,9 @@ export default function SchedulerCalendar() {
             aria-label="Periodo anterior"
           >
             <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={navigateToday}>
+            Mes actual
           </Button>
           <Button
             variant="ghost"
@@ -216,7 +219,7 @@ export default function SchedulerCalendar() {
         >
           <TabsList>
             {/* <TabsTrigger value="day">Día</TabsTrigger> */}
-            <TabsTrigger value="week">Semana</TabsTrigger>
+            {/* <TabsTrigger value="week">Semana</TabsTrigger> */}
             <TabsTrigger value="month">Mes</TabsTrigger>
             <TabsTrigger value="timeline">Línea de tiempo</TabsTrigger>
           </TabsList>
@@ -242,7 +245,7 @@ export default function SchedulerCalendar() {
                 containerHeight={calendarHeight}
               />
             )} */}
-            {currentView === "week" && selectedEmployees.length > 0 && (
+            {/* {currentView === "week" && selectedEmployees.length > 0 && (
               <WeekView
                 startDate={dateRange.start}
                 endDate={dateRange.end}
@@ -252,7 +255,7 @@ export default function SchedulerCalendar() {
                 containerWidth={calendarWidth}
                 containerHeight={calendarHeight}
               />
-            )}
+            )} */}
             {currentView === "month" && selectedEmployees.length > 0 && (
               <MonthView startDate={dateRange.start} endDate={dateRange.end} />
             )}
