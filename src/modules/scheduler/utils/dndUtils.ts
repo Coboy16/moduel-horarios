@@ -10,8 +10,8 @@ import type {
   DroppableTimelineRowData,
 } from "../interfaces/DndData";
 
+// --- Funciones getActiveData y getOverData (sin cambios) ---
 export function getActiveData(active: Active | null): ActiveDragData {
-  // Asegurarse de que realmente accedemos a 'current' si existe
   return active?.data?.current ? (active.data.current as ActiveDragData) : null;
 }
 
@@ -19,52 +19,44 @@ export function getOverData(over: Over | null): OverDragData {
   return over?.data?.current ? (over.data.current as OverDragData) : null;
 }
 
-// --- Type guards Draggable ---
+// --- Type guards (sin cambios) ---
 export function isDraggableEvent(
-  data: ActiveDragData | OverDragData | null | undefined // Hacer el tipo más permisivo
+  data: ActiveDragData | OverDragData | null | undefined
 ): data is DraggableEventData {
   return !!data && data.type === "event";
 }
-
 export function isDraggableSidebarItem(
   data: ActiveDragData | OverDragData | null | undefined
 ): data is DraggableSidebarItemData {
   return !!data && data.type === "sidebarItem";
 }
-
 export function isDraggableResizeHandle(
   data: ActiveDragData | OverDragData | null | undefined
 ): data is DraggableResizeHandleData {
   return !!data && data.type === "resizeHandle";
 }
-
 export function isDraggableWorkedTime(
   data: ActiveDragData | OverDragData | null | undefined
 ): data is DraggableWorkedTimeData {
   return !!data && data.type === "workedTime";
 }
-
-// --- Type guards Droppable ---
 export function isDroppableCell(
   data: ActiveDragData | OverDragData | null | undefined
 ): data is DroppableCellData {
   return !!data && data.type === "cell";
 }
-
 export function isDroppableTimelineRow(
   data: ActiveDragData | OverDragData | null | undefined
 ): data is DroppableTimelineRowData {
   return !!data && data.type === "timelineRow";
 }
 
-// --- Helpers de Cálculo ---
-
-// Calcula la hora basado en el offset Y (para vistas Day/Week)
+// --- calculateTimeFromOffset (para Day/Week - sin cambios) ---
 export function calculateTimeFromOffset(
   offsetY: number,
   gridInfo: DroppableCellData["gridInfo"]
 ): Date {
-  // (Sin cambios, asumir que funciona para Day/Week si se usa)
+  // ... (código existente)
   const { hourHeight, startHour, cellTopOffset } = gridInfo;
   const relativeOffsetY = offsetY - cellTopOffset;
   const hourDecimal = relativeOffsetY / hourHeight + startHour;
@@ -72,68 +64,75 @@ export function calculateTimeFromOffset(
   const minute = Math.floor((hourDecimal % 1) * 60);
   const clampedHour = Math.max(0, Math.min(23, hour));
   const clampedMinute = Math.max(0, Math.min(59, minute));
-  const date = new Date();
+  const date = new Date(); // La fecha real debería venir del contexto del drop
   date.setHours(clampedHour, clampedMinute, 0, 0);
   return date;
 }
 
-// Calcula la hora basado en el offset X (para Timeline)
+// --- calculateTimeFromTimelineOffset (REVISADO con LOGS) ---
 export function calculateTimeFromTimelineOffset(
-  clientX: number, // Coordenada X del puntero relativa a la ventana
-  containerRect: DOMRect | undefined, // Rectángulo del *contenedor de contenido* de la timeline
-  scrollLeft: number, // Scroll horizontal actual del *contenedor scrollable*
-  gridInfo: DroppableTimelineRowData["gridInfo"] // hourWidth y rowLeftOffset (offset de la columna de empleados)
+  clientX: number, // Coordenada X del puntero relativa a la VENTANA
+  containerRect: DOMRect | undefined, // Rectángulo del CONTENEDOR DE CONTENIDO (el div scrollable interno)
+  scrollLeft: number, // Scroll horizontal actual del CONTENEDOR PRINCIPAL (el que tiene overflow)
+  gridInfo: DroppableTimelineRowData["gridInfo"] // hourWidth y rowLeftOffset (debería ser 0 si containerRect es el contenido)
 ): Date {
+  console.log("[calculateTime] Inputs:", {
+    clientX,
+    containerRect,
+    scrollLeft,
+    gridInfo,
+  });
+
   if (!containerRect) {
-    console.warn("calculateTimeFromTimelineOffset missing containerRect");
+    console.warn(
+      "[calculateTime] Missing containerRect, returning current time."
+    );
     return new Date(); // Fallback
   }
 
-  // El rowLeftOffset ahora es 0 porque calculamos relativo al área de contenido
-  const { hourWidth, rowLeftOffset = 0 } = gridInfo;
+  const { hourWidth, rowLeftOffset = 0 } = gridInfo; // rowLeftOffset debería ser 0 aquí
 
-  // Posición X relativa al inicio del área de contenido de la timeline
-  // clientX - containerRect.left = posición X relativa al viewport, dentro del contenedor de contenido
-  // + scrollLeft = ajusta por el scroll horizontal del contenedor padre
-  const relativeX = clientX - containerRect.left + scrollLeft - rowLeftOffset;
+  // 1. Calcular la posición X del puntero RELATIVA al borde izquierdo VISIBLE del contenedor de contenido
+  const pointerXRelativeToContainerVisibleLeft = clientX - containerRect.left;
 
+  // 2. Calcular la posición X REAL dentro del contenido scrollable (considerando el scroll)
+  const absoluteXInContent =
+    pointerXRelativeToContainerVisibleLeft + scrollLeft;
+
+  // 3. Ajustar por el offset inicial de la fila (si lo hubiera, aunque aquí es 0)
+  const relativeX = absoluteXInContent - rowLeftOffset;
+
+  // 4. Calcular la hora decimal
   const hourDecimal = relativeX / hourWidth;
 
-  // Clamping para evitar valores fuera de 0-24h
-  const clampedHourDecimal = Math.max(0, Math.min(24, hourDecimal)); // Permitir hasta 24 para cálculo de minutos
-
+  // 5. Clamping y cálculo de hora/minuto
+  const clampedHourDecimal = Math.max(0, Math.min(24, hourDecimal));
   const hour = Math.floor(clampedHourDecimal);
-
-  // Snap a intervalos de 5 minutos para mejor usabilidad
+  // Snap a 5 minutos
   let minute = Math.round(((clampedHourDecimal % 1) * 60) / 5) * 5;
 
-  // Ajustar si el cálculo da exactamente 24:00 o más (debería ser 23:55 o similar)
+  // Ajustar si pasa de 24:00
   let finalHour = hour;
   if (hour >= 24) {
     finalHour = 23;
-    minute = 55; // Clamp a 55 si es >= 24:00
+    minute = 55;
   } else {
-    minute = Math.min(55, minute); // Asegurar que no pase de 55 para horas < 24
+    minute = Math.min(55, minute); // Clamp a 55
   }
 
-  // Usamos una fecha base (0) y solo establecemos horas/minutos
-  // La fecha real (día) vendrá del `overData.date` en `handleDragEnd`
-  const baseDate = new Date(0);
-  baseDate.setUTCHours(finalHour, minute, 0, 0); // Usar UTC para evitar problemas de zona horaria al solo querer H:M
+  // Crear fecha con la hora/minuto calculados (la fecha del día se añadirá después)
+  const resultDate = new Date(); // Usar new Date() para obtener un objeto Date válido
+  resultDate.setHours(finalHour, minute, 0, 0); // Establecer H:M locales
 
-  console.log("[calculateTimeFromTimelineOffset]", {
-    clientX,
-    containerLeft: containerRect.left,
-    scrollLeft,
-    rowLeftOffset,
+  console.log("[calculateTime] Results:", {
+    pointerXRelativeToContainerVisibleLeft,
+    absoluteXInContent,
     relativeX,
     hourDecimal,
     finalHour,
     minute,
+    resultDateISO: resultDate.toISOString(),
   });
 
-  // Devolvemos una fecha con la hora y minuto calculados (la fecha del día se aplicará después)
-  const resultDate = new Date(); // Crear una nueva fecha para no mutar
-  resultDate.setHours(finalHour, minute, 0, 0);
-  return resultDate;
+  return resultDate; // Devuelve una fecha con H:M calculados
 }

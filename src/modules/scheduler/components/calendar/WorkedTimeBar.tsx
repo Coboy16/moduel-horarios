@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React from "react";
@@ -16,7 +17,7 @@ interface WorkedTimeBarProps {
   salidaMarking: Marking | null;
   regularMinutes: number;
   overtimeMinutes: number;
-  barStyle: React.CSSProperties;
+  barStyle: React.CSSProperties; // Estilo base (top, left, height, width inicial)
   hourWidth: number;
   employeeId: string;
   currentDateISO: string;
@@ -33,6 +34,7 @@ export default function WorkedTimeBar({
   currentDateISO,
 }: WorkedTimeBarProps) {
   const hasSalida = salidaMarking !== null;
+  // Crear un prefijo único para los IDs de este componente específico
   const uniquePrefix = `wt-${currentDateISO}-${employeeId}-${entradaMarking.id}`;
 
   // --- Draggable Principal de la Barra ---
@@ -43,12 +45,12 @@ export default function WorkedTimeBar({
   };
   const {
     attributes: barAttributes,
-    listeners: barListeners, // Estos listeners deben poder activarse
+    listeners: barListeners, // LISTENER PARA MOVER LA BARRA
     setNodeRef: setBarNodeRef,
     transform: barTransform,
     isDragging: isBarDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-bar`,
+    id: `${uniquePrefix}-bar`, // ID único para la barra
     data: draggableBarData,
   });
 
@@ -56,17 +58,17 @@ export default function WorkedTimeBar({
   const resizeLeftData: DraggableResizeHandleData = {
     type: "resizeHandle",
     edge: "left",
-    markingId: entradaMarking.id,
-    relatedMarkingId: salidaMarking?.id ?? null,
-    itemType: "workedTime",
+    markingId: entradaMarking.id, // ID del marcaje a modificar (entrada)
+    relatedMarkingId: salidaMarking?.id ?? null, // ID del otro marcaje (salida)
+    itemType: "workedTime", // Tipo de item
   };
   const {
     attributes: leftAttributes,
-    listeners: leftListeners, // Estos listeners deben poder activarse
+    listeners: leftListeners, // LISTENER PARA MOVER EL HANDLE IZQUIERDO
     setNodeRef: setLeftHandleRef,
     isDragging: isLeftDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-left`,
+    id: `${uniquePrefix}-resize-left`, // ID único para el handle izquierdo
     data: resizeLeftData,
   });
 
@@ -75,72 +77,77 @@ export default function WorkedTimeBar({
     ? {
         type: "resizeHandle",
         edge: "right",
-        markingId: salidaMarking.id,
-        relatedMarkingId: entradaMarking.id,
-        itemType: "workedTime",
+        markingId: salidaMarking.id, // ID del marcaje a modificar (salida)
+        relatedMarkingId: entradaMarking.id, // ID del otro marcaje (entrada)
+        itemType: "workedTime", // Tipo de item
       }
     : null;
-
   const {
     attributes: rightAttributes,
-    listeners: rightListeners, // Estos listeners deben poder activarse
+    listeners: rightListeners, // LISTENER PARA MOVER EL HANDLE DERECHO
     setNodeRef: setRightHandleRef,
     isDragging: isRightDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-right`,
+    id: `${uniquePrefix}-resize-right`, // ID único para el handle derecho
     data: resizeRightData,
-    disabled: !hasSalida,
+    disabled: !hasSalida, // Deshabilitar si no hay salida
   });
 
   // Estilo combinado para la barra principal
   const combinedBarStyle: React.CSSProperties = {
-    ...barStyle,
+    ...barStyle, // Aplicar el estilo base (posición inicial, etc.)
+    // Aplicar transform SOLO si se está arrastrando la barra completa
     transform: isBarDragging ? CSS.Translate.toString(barTransform) : undefined,
     opacity: isBarDragging || isLeftDragging || isRightDragging ? 0.7 : 1,
-    cursor: isBarDragging
-      ? "grabbing"
-      : isLeftDragging || isRightDragging
-      ? "ew-resize"
-      : "grab", // Cambiar cursor también al redimensionar
+    cursor: isBarDragging ? "grabbing" : "grab", // Cursor para la barra
+    // zIndex se hereda de barStyle o se eleva si se arrastra/redimensiona
     zIndex:
       isBarDragging || isLeftDragging || isRightDragging
         ? 1000
         : barStyle.zIndex ?? 10,
-    position: "absolute",
+    position: "absolute", // Asegurar que sea absoluto
     display: "flex",
     borderRadius: "4px",
     overflow: "hidden",
-    pointerEvents: "auto", // Asegurar que la barra reciba eventos
+    pointerEvents: "auto", // Debe ser interactivo
   };
 
   const regularWidth = (regularMinutes / 60) * hourWidth;
   const overtimeWidth = (overtimeMinutes / 60) * hourWidth;
 
-  // Función para detener la propagación de eventos específicos (NO POINTER DOWN)
-  const stopSpecificPropagation = (e: React.MouseEvent | React.TouchEvent) => {
-    console.log(`[WorkedTimeBar] Event ${e.type} stopped propagation`);
-    e.stopPropagation();
+  // --- Función para detener propagación de eventos NO D&D ---
+  const stopNonDndPropagation = (e: React.MouseEvent | React.TouchEvent) => {
+    // Evitar que click, context menu, etc., en la barra interfieran
+    if (e.type !== "pointerdown") {
+      // NO detener pointerdown
+      console.log(
+        `[WorkedTimeBar] Event ${e.type} stopped propagation on main bar`
+      );
+      e.stopPropagation();
+    }
   };
 
-  // Wrapper para los listeners de los handles para añadir logging
-  const logHandleListeners = (
+  // --- Envolver listeners de handles para log y stopPropagation ---
+  const wrapHandleListeners = (
     handleName: string,
     listeners: ReturnType<typeof useDraggable>["listeners"]
   ) => {
     if (!listeners) return {};
-    return Object.entries(listeners).reduce((acc, [eventName, handler]) => {
-      acc[eventName as keyof typeof listeners] = (event: any) => {
-        console.log(`[Handle ${handleName}] Event: ${eventName}`);
-        // Detener propagación aquí para los handles SÍ es seguro
-        event.stopPropagation();
-        handler(event);
+    const wrappedListeners: typeof listeners = {};
+    for (const eventName in listeners) {
+      wrappedListeners[eventName as keyof typeof listeners] = (event: any) => {
+        console.log(
+          `[WorkedTimeBar Handle ${handleName}] Event: ${eventName} triggered`
+        );
+        event.stopPropagation(); // DETENER propagación para los handles
+        listeners[eventName as keyof typeof listeners]?.(event);
       };
-      return acc;
-    }, {} as typeof listeners);
+    }
+    return wrappedListeners;
   };
 
-  const loggedLeftListeners = logHandleListeners("Left", leftListeners);
-  const loggedRightListeners = logHandleListeners("Right", rightListeners);
+  const loggedLeftListeners = wrapHandleListeners("Left", leftListeners);
+  const loggedRightListeners = wrapHandleListeners("Right", rightListeners);
 
   return (
     // Contenedor principal de la barra, APLICAR LISTENERS DE LA BARRA AQUÍ
@@ -150,9 +157,13 @@ export default function WorkedTimeBar({
       {...barAttributes} // Atributos para accesibilidad y D&D
       {...barListeners} // LISTENERS PARA ARRASTRAR LA BARRA COMPLETA
       // Quitar onPointerDown={stopPropagation} para permitir que dnd-kit lo capture
-      onClick={stopSpecificPropagation} // Detener solo click normal
-      onContextMenu={stopSpecificPropagation} // Detener context menu
-      onDoubleClick={stopSpecificPropagation} // Detener doble click
+      onClick={stopNonDndPropagation}
+      onContextMenu={stopNonDndPropagation}
+      onDoubleClick={stopNonDndPropagation}
+      title={`Tiempo trabajado: ${(
+        (regularMinutes + overtimeMinutes) /
+        60
+      ).toFixed(1)}h`}
     >
       {/* Barra Verde (Regular) - SIN event handlers */}
       {regularMinutes > 0 && (

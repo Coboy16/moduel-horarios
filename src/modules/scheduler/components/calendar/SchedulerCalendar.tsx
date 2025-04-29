@@ -23,7 +23,15 @@ import {
   endOfWeek,
 } from "date-fns";
 
-export default function SchedulerCalendar() {
+interface SchedulerCalendarProps {
+  timelineContentRef: React.RefObject<HTMLDivElement>; // Ref para el contenido
+  timelineMainScrollContainerRef: React.RefObject<HTMLDivElement>; // Ref para el scroll principal
+}
+
+export default function SchedulerCalendar({
+  timelineContentRef,
+  timelineMainScrollContainerRef,
+}: SchedulerCalendarProps) {
   const { currentView, dateRange, setDateRange, setCurrentView } = useFilters();
   const { selectedEmployees } = useEmployees();
   const { events } = useEvents();
@@ -282,6 +290,8 @@ export default function SchedulerCalendar() {
                 employees={selectedEmployees}
                 containerWidth={calendarWidth}
                 containerHeight={calendarHeight}
+                timelineContentRef={timelineContentRef}
+                timelineMainScrollContainerRef={timelineMainScrollContainerRef}
               />
             )}
             {/* Mensaje si no hay empleados seleccionados y no estamos en timeline */}
