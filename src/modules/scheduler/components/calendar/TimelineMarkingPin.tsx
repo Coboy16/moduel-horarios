@@ -20,7 +20,6 @@ interface TimelineMarkingPinProps {
 }
 
 const getMethodIcon = (method: Marking["method"]) => {
-  // ... (función igual que antes)
   switch (method) {
     case "HUELLA":
       return Fingerprint;
@@ -60,7 +59,6 @@ export default function TimelineMarkingPin({
       <Tooltip open={showTooltip} delayDuration={150}>
         <TooltipTrigger asChild>
           <div
-            // NO AÑADIR REFS NI LISTENERS DE DRAGGABLE AQUÍ
             className={`absolute cursor-pointer z-20 w-6 h-6 rounded-full flex items-center justify-center border border-background shadow-sm ${statusColor.bg} ${statusColor.text}`}
             style={style} // Aplica la posición calculada por TimelineView
             onContextMenu={handleContextMenu}
@@ -71,8 +69,16 @@ export default function TimelineMarkingPin({
             <MarkingIcon className="h-4 w-4" />
           </div>
         </TooltipTrigger>
-        {/* ... (TooltipContent igual que antes) ... */}
-        <TooltipContent side="top" className="max-w-xs z-[1100]">
+        <TooltipContent
+          side="top"
+          align="center"
+          className="max-w-xs z-[9999]"
+          sideOffset={5}
+          // Añadir avoidCollisions y portales
+          avoidCollisions={false}
+          // Asegurar que se use portal
+          forceMount={showTooltip}
+        >
           <div className="space-y-1">
             <div className="font-medium">Marcaje: {marking.type}</div>
             <div className="text-xs">
@@ -86,7 +92,7 @@ export default function TimelineMarkingPin({
             {marking.location && (
               <div className="text-xs">Ubicación: {marking.location}</div>
             )}
-            {marking.method && ( // Show method in tooltip
+            {marking.method && (
               <div className="text-xs">Método: {marking.method}</div>
             )}
           </div>

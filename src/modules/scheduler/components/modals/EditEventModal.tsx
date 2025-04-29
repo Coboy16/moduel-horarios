@@ -1,31 +1,49 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useUI } from "../../hooks/useUI"
-import { useEvents } from "../../hooks/useEvents"
-import { useEmployees } from "../../hooks/useEmployees"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Textarea } from "../ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../ui/form"
-import { X } from "lucide-react"
-import { formatDateForInput, formatTimeForInput } from "../../utils/dateUtils"
-import type { Event } from "../../interfaces/Event"
-import { useForm } from "react-hook-form"
+import { useState, useEffect } from "react";
+import { useUI } from "../../hooks/useUI";
+import { useEvents } from "../../hooks/useEvents";
+import { useEmployees } from "../../hooks/useEmployees";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "../ui/form";
+import { formatDateForInput, formatTimeForInput } from "../../utils/dateUtils";
+import type { Event } from "../../interfaces/Event";
+import { useForm } from "react-hook-form";
 
-type EditEventModalProps = {}
+type EditEventModalProps = {};
 
 export default function EditEventModal({}: EditEventModalProps) {
-  const { closeEditEventModal, editEventData } = useUI()
-  const { updateEvent, deleteEvent, eventTypes } = useEvents()
-  const { employees } = useEmployees()
+  const { closeEditEventModal, editEventData } = useUI();
+  const { updateEvent, deleteEvent, eventTypes } = useEvents();
+  const { employees } = useEmployees();
 
-  const [startDate, setStartDate] = useState("")
-  const [startTime, setStartTime] = useState("")
-  const [endDate, setEndDate] = useState("")
-  const [endTime, setEndTime] = useState("")
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
 
   const form = useForm({
     defaultValues: {
@@ -35,14 +53,14 @@ export default function EditEventModal({}: EditEventModalProps) {
       location: "",
       description: "",
     },
-  })
+  });
 
   // Set initial values based on event data
   useEffect(() => {
     if (editEventData) {
-      const event = editEventData
-      const startDateTime = new Date(event.startTime)
-      const endDateTime = new Date(event.endTime)
+      const event = editEventData;
+      const startDateTime = new Date(event.startTime);
+      const endDateTime = new Date(event.endTime);
 
       form.reset({
         title: event.title,
@@ -50,20 +68,20 @@ export default function EditEventModal({}: EditEventModalProps) {
         employeeId: event.employeeId,
         location: event.location || "",
         description: event.description || "",
-      })
+      });
 
-      setStartDate(formatDateForInput(startDateTime))
-      setStartTime(formatTimeForInput(startDateTime))
-      setEndDate(formatDateForInput(endDateTime))
-      setEndTime(formatTimeForInput(endDateTime))
+      setStartDate(formatDateForInput(startDateTime));
+      setStartTime(formatTimeForInput(startDateTime));
+      setEndDate(formatDateForInput(endDateTime));
+      setEndTime(formatTimeForInput(endDateTime));
     }
-  }, [editEventData, form])
+  }, [editEventData, form]);
 
   const onSubmit = form.handleSubmit((data) => {
-    if (!editEventData) return
+    if (!editEventData) return;
 
-    const startDateTime = new Date(`${startDate}T${startTime}`)
-    const endDateTime = new Date(`${endDate}T${endTime}`)
+    const startDateTime = new Date(`${startDate}T${startTime}`);
+    const endDateTime = new Date(`${endDate}T${endTime}`);
 
     const updatedEvent: Event = {
       ...editEventData,
@@ -74,29 +92,26 @@ export default function EditEventModal({}: EditEventModalProps) {
       endTime: endDateTime.toISOString(),
       location: data.location,
       description: data.description,
-    }
+    };
 
-    updateEvent(updatedEvent)
-    closeEditEventModal()
-  })
+    updateEvent(updatedEvent);
+    closeEditEventModal();
+  });
 
   const handleDelete = () => {
     if (editEventData) {
-      deleteEvent(editEventData.id)
-      closeEditEventModal()
+      deleteEvent(editEventData.id);
+      closeEditEventModal();
     }
-  }
+  };
 
-  if (!editEventData) return null
+  if (!editEventData) return null;
 
   return (
     <Dialog open={true} onOpenChange={closeEditEventModal}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Editar Evento</DialogTitle>
-          <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={closeEditEventModal}>
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
         <Form {...form}>
@@ -133,7 +148,10 @@ export default function EditEventModal({}: EditEventModalProps) {
                       {eventTypes.map((type) => (
                         <SelectItem key={type.id} value={type.id}>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: type.color }}
+                            />
                             {type.name}
                           </div>
                         </SelectItem>
@@ -174,22 +192,42 @@ export default function EditEventModal({}: EditEventModalProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <FormLabel>Fecha inicio</FormLabel>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <FormLabel>Hora inicio</FormLabel>
-                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+                <Input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  required
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <FormLabel>Fecha fin</FormLabel>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <FormLabel>Hora fin</FormLabel>
-                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+                <Input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  required
+                />
               </div>
             </div>
 
@@ -214,7 +252,11 @@ export default function EditEventModal({}: EditEventModalProps) {
                 <FormItem>
                   <FormLabel>Descripción</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Descripción (opcional)" className="resize-none" {...field} />
+                    <Textarea
+                      placeholder="Descripción (opcional)"
+                      className="resize-none"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -222,11 +264,19 @@ export default function EditEventModal({}: EditEventModalProps) {
             />
 
             <DialogFooter className="gap-2">
-              <Button type="button" variant="destructive" onClick={handleDelete}>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+              >
                 Eliminar
               </Button>
               <div className="flex-1"></div>
-              <Button type="button" variant="outline" onClick={closeEditEventModal}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeEditEventModal}
+              >
                 Cancelar
               </Button>
               <Button type="submit">Guardar</Button>
@@ -235,5 +285,5 @@ export default function EditEventModal({}: EditEventModalProps) {
         </Form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

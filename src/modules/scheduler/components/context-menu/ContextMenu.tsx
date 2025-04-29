@@ -84,7 +84,7 @@ export default function ContextMenu({
           <>
             <MenuItem
               icon={<Calendar />}
-              label="Agregar eventoaa"
+              label="Agregar evento2"
               onClick={() => {
                 closeContextMenu();
                 const validDate =
