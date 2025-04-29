@@ -98,16 +98,6 @@ export default function EmployeeList() {
     Math.ceil(filteredEmployees.length / ITEMS_PER_PAGE)
   );
 
-  // Resetear a página 1 cuando cambian los filtros
-  useEffect(() => {
-    // Si el problema persiste, la depuración en SearchFilter sigue siendo necesaria.
-    const areFiltersActive =
-      searchFilters.search.length > 0 ||
-      searchFilters.departments.length > 0 ||
-      searchFilters.positions.length > 0;
-    setCurrentPage(1);
-  }, [searchFilters]);
-
   const paginatedEmployees = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredEmployees.slice(startIndex, startIndex + ITEMS_PER_PAGE);
