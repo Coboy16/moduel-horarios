@@ -345,13 +345,13 @@ export default function EmployeeScheduler() {
             }
           } else {
             // DayView (y WeekView necesitaría lógica similar)
-            const minutesChangedY = delta.y * pixelToMinutesFactor;
-            if (edge === "left") {
-              newStartTime = addMinutes(initialStart, minutesChangedY);
-            } else {
-              // edge === 'right'
-              newEndTime = addMinutes(initialEnd, minutesChangedY);
-            }
+            // const minutesChangedY = delta.y * pixelToMinutesFactor;
+            // if (edge === "left") {
+            //   newStartTime = addMinutes(initialStart, minutesChangedY);
+            // } else {
+            //   // edge === 'right'
+            //   newEndTime = addMinutes(initialEnd, minutesChangedY);
+            // }
           }
 
           // Validar que el inicio no sea posterior al fin
