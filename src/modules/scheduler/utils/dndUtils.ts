@@ -71,68 +71,76 @@ export function calculateTimeFromOffset(
 
 // --- calculateTimeFromTimelineOffset (REVISADO con LOGS) ---
 export function calculateTimeFromTimelineOffset(
-  clientX: number, // Coordenada X del puntero relativa a la VENTANA
-  containerRect: DOMRect | undefined, // Rectángulo del CONTENEDOR DE CONTENIDO (el div scrollable interno)
-  scrollLeft: number, // Scroll horizontal actual del CONTENEDOR PRINCIPAL (el que tiene overflow)
-  gridInfo: DroppableTimelineRowData["gridInfo"] // hourWidth y rowLeftOffset (debería ser 0 si containerRect es el contenido)
+  pointerClientX: number, // Renombrado para claridad: Coordenada X del puntero relativa a la VENTANA
+  containerRect: DOMRect | undefined, // Rectángulo del CONTENEDOR DE CONTENIDO
+  scrollLeft: number, // Scroll horizontal actual del CONTENEDOR PRINCIPAL
+  gridInfo: DroppableTimelineRowData["gridInfo"] // hourWidth
 ): Date {
-  console.log("[calculateTime] Inputs:", {
-    clientX,
-    containerRect,
-    scrollLeft,
-    gridInfo,
-  });
+  // console.log("[calculateTime] Inputs:", { pointerClientX, containerRect, scrollLeft, gridInfo });
 
-  if (!containerRect) {
+  if (
+    !containerRect ||
+    !gridInfo ||
+    !gridInfo.hourWidth ||
+    gridInfo.hourWidth <= 0
+  ) {
     console.warn(
-      "[calculateTime] Missing containerRect, returning current time."
+      "[calculateTime] Missing or invalid containerRect/gridInfo/hourWidth, returning current time.",
+      { containerRect, gridInfo }
     );
     return new Date(); // Fallback
   }
 
-  const { hourWidth, rowLeftOffset = 0 } = gridInfo; // rowLeftOffset debería ser 0 aquí
+  const { hourWidth } = gridInfo;
 
-  // 1. Calcular la posición X del puntero RELATIVA al borde izquierdo VISIBLE del contenedor de contenido
-  const pointerXRelativeToContainerVisibleLeft = clientX - containerRect.left;
+  // 1. Posición X del puntero RELATIVA al borde izquierdo VISIBLE del contenedor de contenido
+  const pointerXRelativeToContainerVisibleLeft =
+    pointerClientX - containerRect.left;
 
-  // 2. Calcular la posición X REAL dentro del contenido scrollable (considerando el scroll)
+  // 2. Posición X REAL dentro del contenido scrollable (considerando el scroll)
+  // Esta es la coordenada horizontal absoluta dentro del área de 24 horas
   const absoluteXInContent =
     pointerXRelativeToContainerVisibleLeft + scrollLeft;
 
-  // 3. Ajustar por el offset inicial de la fila (si lo hubiera, aunque aquí es 0)
-  const relativeX = absoluteXInContent - rowLeftOffset;
+  // 3. Calcular la hora decimal (puede ser < 0 o > 24 temporalmente)
+  const hourDecimal = absoluteXInContent / hourWidth;
 
-  // 4. Calcular la hora decimal
-  const hourDecimal = relativeX / hourWidth;
-
-  // 5. Clamping y cálculo de hora/minuto
+  // 4. Clamping y cálculo de hora/minuto
+  // Clamp primero entre 0 y 24 para evitar horas/minutos negativos o excesivos
   const clampedHourDecimal = Math.max(0, Math.min(24, hourDecimal));
+
   const hour = Math.floor(clampedHourDecimal);
   // Snap a 5 minutos
   let minute = Math.round(((clampedHourDecimal % 1) * 60) / 5) * 5;
 
-  // Ajustar si pasa de 24:00
+  // Ajustar si el cálculo resulta en 24:00 o más -> debe ser 23:55 max
   let finalHour = hour;
-  if (hour >= 24) {
+  if (finalHour >= 24) {
     finalHour = 23;
-    minute = 55;
+    minute = 55; // Clamp minuto a 55 si la hora es 24 o más
   } else {
-    minute = Math.min(55, minute); // Clamp a 55
+    // Asegurar que el minuto no exceda 55 incluso si la hora es < 24
+    minute = Math.min(55, minute);
   }
 
-  // Crear fecha con la hora/minuto calculados (la fecha del día se añadirá después)
-  const resultDate = new Date(); // Usar new Date() para obtener un objeto Date válido
-  resultDate.setHours(finalHour, minute, 0, 0); // Establecer H:M locales
+  // Crear fecha con la hora/minuto calculados
+  const resultDate = new Date(0); // Usar fecha base (epoch)
+  // Usar UTC para evitar problemas de zona horaria local al solo querer H:M
+  resultDate.setUTCHours(finalHour, minute, 0, 0);
 
-  console.log("[calculateTime] Results:", {
-    pointerXRelativeToContainerVisibleLeft,
-    absoluteXInContent,
-    relativeX,
-    hourDecimal,
-    finalHour,
-    minute,
-    resultDateISO: resultDate.toISOString(),
-  });
+  // console.log("[calculateTime] Results:", {
+  //     pointerXRelativeToContainerVisibleLeft,
+  //     absoluteXInContent,
+  //     hourDecimal,
+  //     clampedHourDecimal,
+  //     finalHour,
+  //     minute,
+  //     resultDateISO: resultDate.toISOString(), // Mostrar hora UTC
+  // });
 
-  return resultDate; // Devuelve una fecha con H:M calculados
+  // Devolver la fecha con la HORA y MINUTO calculados (la fecha del día se añadirá después)
+  // Necesitamos devolver H:M locales para que 'set' funcione bien después.
+  const localResultDate = new Date();
+  localResultDate.setHours(finalHour, minute, 0, 0);
+  return localResultDate;
 }
