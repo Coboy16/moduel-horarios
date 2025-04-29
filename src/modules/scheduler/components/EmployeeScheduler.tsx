@@ -40,7 +40,6 @@ import FloatingTimeApprovalPanel from "./floating-time/FloatingTimeApprovalPanel
 import EventItem from "./calendar/EventItem";
 import TimelineEventItem from "./calendar/TimelineEventItem";
 import TimelineMarkingPin from "./calendar/TimelineMarkingPin";
-import WorkedTimeBar from "./calendar/WorkedTimeBar";
 
 import {
   getActiveData,

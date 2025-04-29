@@ -4,13 +4,13 @@
 import React from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+// import { GripVertical } from "lucide-react"; // Ya no se usa GripVertical visualmente
 import type { Marking } from "../../interfaces/Marking";
 import type {
   DraggableWorkedTimeData,
   DraggableResizeHandleData,
 } from "../../interfaces/DndData";
-import { cn } from "../../lib/utils"; // Importar cn
+import { cn } from "../../lib/utils";
 
 interface WorkedTimeBarProps {
   entradaMarking: Marking;
@@ -34,7 +34,6 @@ export default function WorkedTimeBar({
   currentDateISO,
 }: WorkedTimeBarProps) {
   const hasSalida = salidaMarking !== null;
-  // Crear un prefijo único para los IDs de este componente específico
   const uniquePrefix = `wt-${currentDateISO}-${employeeId}-${entradaMarking.id}`;
 
   // --- Draggable Principal de la Barra ---
@@ -45,12 +44,12 @@ export default function WorkedTimeBar({
   };
   const {
     attributes: barAttributes,
-    listeners: barListeners, // LISTENER PARA MOVER LA BARRA
+    listeners: barListeners,
     setNodeRef: setBarNodeRef,
     transform: barTransform,
     isDragging: isBarDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-bar`, // ID único para la barra
+    id: `${uniquePrefix}-bar`,
     data: draggableBarData,
   });
 
@@ -58,17 +57,17 @@ export default function WorkedTimeBar({
   const resizeLeftData: DraggableResizeHandleData = {
     type: "resizeHandle",
     edge: "left",
-    markingId: entradaMarking.id, // ID del marcaje a modificar (entrada)
-    relatedMarkingId: salidaMarking?.id ?? null, // ID del otro marcaje (salida)
-    itemType: "workedTime", // Tipo de item
+    markingId: entradaMarking.id,
+    relatedMarkingId: salidaMarking?.id ?? null,
+    itemType: "workedTime",
   };
   const {
     attributes: leftAttributes,
-    listeners: leftListeners, // LISTENER PARA MOVER EL HANDLE IZQUIERDO
+    listeners: leftListeners,
     setNodeRef: setLeftHandleRef,
     isDragging: isLeftDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-left`, // ID único para el handle izquierdo
+    id: `${uniquePrefix}-resize-left`,
     data: resizeLeftData,
   });
 
@@ -77,55 +76,21 @@ export default function WorkedTimeBar({
     ? {
         type: "resizeHandle",
         edge: "right",
-        markingId: salidaMarking.id, // ID del marcaje a modificar (salida)
-        relatedMarkingId: entradaMarking.id, // ID del otro marcaje (entrada)
-        itemType: "workedTime", // Tipo de item
+        markingId: salidaMarking.id,
+        relatedMarkingId: entradaMarking.id,
+        itemType: "workedTime",
       }
     : null;
   const {
     attributes: rightAttributes,
-    listeners: rightListeners, // LISTENER PARA MOVER EL HANDLE DERECHO
+    listeners: rightListeners,
     setNodeRef: setRightHandleRef,
     isDragging: isRightDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-right`, // ID único para el handle derecho
+    id: `${uniquePrefix}-resize-right`,
     data: resizeRightData,
-    disabled: !hasSalida, // Deshabilitar si no hay salida
+    disabled: !hasSalida,
   });
-
-  // Estilo combinado para la barra principal
-  const combinedBarStyle: React.CSSProperties = {
-    ...barStyle, // Aplicar el estilo base (posición inicial, etc.)
-    // Aplicar transform SOLO si se está arrastrando la barra completa
-    transform: isBarDragging ? CSS.Translate.toString(barTransform) : undefined,
-    opacity: isBarDragging || isLeftDragging || isRightDragging ? 0.7 : 1,
-    cursor: isBarDragging ? "grabbing" : "grab", // Cursor para la barra
-    // zIndex se hereda de barStyle o se eleva si se arrastra/redimensiona
-    zIndex:
-      isBarDragging || isLeftDragging || isRightDragging
-        ? 1000
-        : barStyle.zIndex ?? 10,
-    position: "absolute", // Asegurar que sea absoluto
-    display: "flex",
-    borderRadius: "4px",
-    overflow: "hidden",
-    pointerEvents: "auto", // Debe ser interactivo
-  };
-
-  const regularWidth = (regularMinutes / 60) * hourWidth;
-  const overtimeWidth = (overtimeMinutes / 60) * hourWidth;
-
-  // --- Función para detener propagación de eventos NO D&D ---
-  const stopNonDndPropagation = (e: React.MouseEvent | React.TouchEvent) => {
-    // Evitar que click, context menu, etc., en la barra interfieran
-    if (e.type !== "pointerdown") {
-      // NO detener pointerdown
-      console.log(
-        `[WorkedTimeBar] Event ${e.type} stopped propagation on main bar`
-      );
-      e.stopPropagation();
-    }
-  };
 
   // --- Envolver listeners de handles para log y stopPropagation ---
   const wrapHandleListeners = (
@@ -136,9 +101,7 @@ export default function WorkedTimeBar({
     const wrappedListeners: typeof listeners = {};
     for (const eventName in listeners) {
       wrappedListeners[eventName as keyof typeof listeners] = (event: any) => {
-        console.log(
-          `[WorkedTimeBar Handle ${handleName}] Event: ${eventName} triggered`
-        );
+        // console.log(`[WorkedTimeBar Handle ${handleName}] Event: ${eventName}`);
         event.stopPropagation(); // DETENER propagación para los handles
         listeners[eventName as keyof typeof listeners]?.(event);
       };
@@ -149,98 +112,144 @@ export default function WorkedTimeBar({
   const loggedLeftListeners = wrapHandleListeners("Left", leftListeners);
   const loggedRightListeners = wrapHandleListeners("Right", rightListeners);
 
+  // Estilo combinado para el contenedor principal que se mueve
+  const combinedContainerStyle: React.CSSProperties = {
+    ...barStyle, // Aplicar el estilo base (posición inicial, altura)
+    // Quitar width de aquí, se controla por el contenido ahora
+    // Quitar background/border de aquí, eso va en la barra visual interna
+    // Aplicar transform SOLO si se está arrastrando la barra completa
+    transform: isBarDragging ? CSS.Translate.toString(barTransform) : undefined,
+    opacity: isBarDragging || isLeftDragging || isRightDragging ? 0.7 : 1,
+    // Cursor se maneja en elementos internos (barra visual y pines)
+    zIndex:
+      isBarDragging || isLeftDragging || isRightDragging
+        ? 1000
+        : barStyle.zIndex ?? 10,
+    position: "absolute",
+    // display: 'flex', // No necesario aquí, el flex está en la barra interna
+    // borderRadius: '4px', // No necesario aquí
+    // overflow: 'hidden', // No necesario aquí
+    pointerEvents: "auto", // El contenedor debe ser interactivo para D&D
+    // Ajustar left/width para acomodar los pines si es necesario
+    // Por ejemplo, si los pines tienen w-4, el left podría necesitar ajustarse
+    // y el width total también. Esto depende de cómo `barStyle` calcula el left/width inicial.
+    // Asumiremos que barStyle.left y barStyle.width ya consideran el espacio total.
+  };
+
+  const regularWidth = (regularMinutes / 60) * hourWidth;
+  const overtimeWidth = (overtimeMinutes / 60) * hourWidth;
+  const totalBarWidth = regularWidth + overtimeWidth;
+
+  // Función para detener otros eventos (ya no se usa directamente)
+  // const stopNonDndPropagation = (e: React.MouseEvent | React.TouchEvent) => {
+  //   if (e.type !== 'pointerdown') {
+  //     e.stopPropagation();
+  //   }
+  // };
+
+  const isInteracting = isBarDragging || isLeftDragging || isRightDragging;
+
   return (
-    // Contenedor principal de la barra, APLICAR LISTENERS DE LA BARRA AQUÍ
+    // Contenedor principal: Posicionamiento y Drag de toda la barra
     <div
       ref={setBarNodeRef}
-      style={combinedBarStyle}
-      {...barAttributes} // Atributos para accesibilidad y D&D
-      {...barListeners} // LISTENERS PARA ARRASTRAR LA BARRA COMPLETA
-      // Quitar onPointerDown={stopPropagation} para permitir que dnd-kit lo capture
-      onClick={stopNonDndPropagation}
-      onContextMenu={stopNonDndPropagation}
-      onDoubleClick={stopNonDndPropagation}
+      style={combinedContainerStyle}
+      className="group/worked-time" // Grupo para hover effects en los pines
+      {...barAttributes}
+      {...barListeners} // Listeners para mover TODA la barra
       title={`Tiempo trabajado: ${(
         (regularMinutes + overtimeMinutes) /
         60
       ).toFixed(1)}h`}
     >
-      {/* Barra Verde (Regular) - SIN event handlers */}
-      {regularMinutes > 0 && (
-        <div
-          className="h-full bg-green-400 pointer-events-none"
-          style={{
-            width: `${regularWidth}px`,
-            borderTopLeftRadius: "4px",
-            borderBottomLeftRadius: "4px",
-            borderTopRightRadius: overtimeMinutes <= 0 ? "4px" : "0",
-            borderBottomRightRadius: overtimeMinutes <= 0 ? "4px" : "0",
-          }}
-          title={`Regular: ${Math.round(regularMinutes / 6) / 10}h`}
-        />
-      )}
+      {/* Contenedor de la Barra Visual (verde/amarillo) */}
+      {/* Este div ahora toma el cursor de movimiento y los listeners de hover/click si son necesarios */}
+      <div
+        className={cn(
+          "relative mx-1 flex h-5 rounded overflow-hidden shadow-sm", // Altura ajustada (era h-full), margen horizontal para pines, flex para segmentos
+          isBarDragging ? "cursor-grabbing" : "cursor-grab"
+        )}
+        style={{ width: `${totalBarWidth}px` }}
+        // Podrías añadir aquí onClick, onContextMenu si fueran necesarios en la barra misma
+        // onClick={stopNonDndPropagation}
+        // onContextMenu={stopNonDndPropagation}
+      >
+        {/* Barra Verde (Regular) */}
+        {regularMinutes > 0 && (
+          <div
+            className="h-full bg-green-400 pointer-events-none" // No interactivo directamente
+            style={{
+              width: `${regularWidth}px`,
+              // Los border-radius se manejan en el contenedor padre (.rounded)
+            }}
+            title={`Regular: ${Math.round(regularMinutes / 6) / 10}h`}
+          />
+        )}
 
-      {/* Barra Amarilla (Overtime) - SIN event handlers */}
-      {overtimeMinutes > 0 && (
-        <div
-          className="h-full bg-yellow-400 pointer-events-none"
-          style={{
-            width: `${overtimeWidth}px`,
-            borderTopRightRadius: "4px",
-            borderBottomRightRadius: "4px",
-            borderTopLeftRadius: regularMinutes <= 0 ? "4px" : "0",
-            borderBottomLeftRadius: regularMinutes <= 0 ? "4px" : "0",
-          }}
-          title={`Overtime: ${Math.round(overtimeMinutes / 6) / 10}h`}
-        />
-      )}
-
-      {/* --- Handles de Redimensionamiento --- */}
-      {/* APLICAR LISTENERS DE LOS HANDLES AQUÍ */}
-
-      {/* Handle Izquierdo (Entrada) */}
+        {/* Barra Amarilla (Overtime) */}
+        {overtimeMinutes > 0 && (
+          <div
+            className="h-full bg-yellow-400 pointer-events-none" // No interactivo directamente
+            style={{
+              width: `${overtimeWidth}px`,
+              // Los border-radius se manejan en el contenedor padre (.rounded)
+            }}
+            title={`Overtime: ${Math.round(overtimeMinutes / 6) / 10}h`}
+          />
+        )}
+      </div>{" "}
+      {/* Fin Contenedor Barra Visual */}
+      {/* --- Pin Handle Izquierdo (Entrada) --- */}
       <div
         ref={setLeftHandleRef} // Ref para dnd-kit
-        {...leftAttributes} // Atributos del handle
-        {...loggedLeftListeners} // LISTENERS PARA ARRASTRAR ESTE HANDLE
+        {...leftAttributes} // Atributos D&D
+        {...loggedLeftListeners} // Listeners D&D (con stopPropagation)
         className={cn(
-          "absolute -left-1 top-1/2 -translate-y-1/2 w-3 h-4 cursor-ew-resize z-20",
-          "flex items-center justify-center opacity-60 hover:opacity-100 group"
+          "absolute left-0 top-[-4px] bottom-[-4px]", // Posicionamiento absoluto en el borde izquierdo
+          "w-4 z-20 cursor-ew-resize", // Ancho clickeable, z-index, cursor
+          "flex justify-center", // Centrar contenido del pin
+          // Opacidad controlada por hover en el grupo padre
+          "opacity-60 group-hover/worked-time:opacity-100 transition-opacity"
         )}
-        style={{ touchAction: "none" }}
+        style={{ touchAction: "none" }} // Para interacciones táctiles
         aria-label="Redimensionar inicio"
-        // Quitar stopPropagation de aquí, ya está en los listeners loggeados
-        // onClick={stopSpecificPropagation}
-        // onDoubleClick={stopSpecificPropagation}
-        // onContextMenu={stopSpecificPropagation}
       >
-        <div className="bg-gray-300 group-hover:bg-gray-400 rounded-sm w-full h-full flex items-center justify-center">
-          <GripVertical className="h-3 w-3 text-gray-600 pointer-events-none" />
+        {/* Estructura Visual del Pin */}
+        <div className="flex flex-col items-center w-full h-full pointer-events-none">
+          {/* Círculo */}
+          <div className="w-3 h-3 rounded-full bg-slate-600 mt-[-1px]" />{" "}
+          {/* Color y forma */}
+          {/* Línea */}
+          <div className="flex-grow w-px bg-slate-400" /> {/* Línea vertical */}
         </div>
       </div>
-
-      {/* Handle Derecho (Salida) - Condicional */}
+      {/* --- Pin Handle Derecho (Salida) - Condicional --- */}
       {hasSalida && (
         <div
           ref={setRightHandleRef} // Ref para dnd-kit
-          {...rightAttributes} // Atributos del handle
-          {...loggedRightListeners} // LISTENERS PARA ARRASTRAR ESTE HANDLE
+          {...rightAttributes} // Atributos D&D
+          {...loggedRightListeners} // Listeners D&D (con stopPropagation)
           className={cn(
-            "absolute -right-1 top-1/2 -translate-y-1/2 w-3 h-4 cursor-ew-resize z-20",
-            "flex items-center justify-center opacity-60 hover:opacity-100 group"
+            "absolute right-0 top-[-4px] bottom-[-4px]", // Posicionamiento absoluto en el borde derecho
+            "w-4 z-20 cursor-ew-resize", // Ancho, z-index, cursor
+            "flex justify-center", // Centrar contenido
+            // Opacidad
+            "opacity-60 group-hover/worked-time:opacity-100 transition-opacity"
           )}
           style={{ touchAction: "none" }}
           aria-label="Redimensionar fin"
-          // Quitar stopPropagation de aquí, ya está en los listeners loggeados
-          // onClick={stopSpecificPropagation}
-          // onDoubleClick={stopSpecificPropagation}
-          // onContextMenu={stopSpecificPropagation}
         >
-          <div className="bg-gray-300 group-hover:bg-gray-400 rounded-sm w-full h-full flex items-center justify-center">
-            <GripVertical className="h-3 w-3 text-gray-600 pointer-events-none" />
+          {/* Estructura Visual del Pin */}
+          <div className="flex flex-col items-center w-full h-full pointer-events-none">
+            {/* Círculo */}
+            <div className="w-3 h-3 rounded-full bg-slate-600 mt-[-1px]" />{" "}
+            {/* Color y forma */}
+            {/* Línea */}
+            <div className="flex-grow w-px bg-slate-400" />{" "}
+            {/* Línea vertical */}
           </div>
         </div>
       )}
-    </div>
+    </div> // Fin Contenedor Principal
   );
 }
