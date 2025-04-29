@@ -105,6 +105,11 @@ export default function FilterBar() {
           <Button
             variant={!showTurnos ? "default" : "outline"}
             size="sm"
+            className={
+              showTurnos
+                ? "rounded-[10px] border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                : "rounded-[10px] border border-blue-600 text-blue-600 bg-transparent hover:bg-blue-50"
+            }
             onClick={() => {
               setShowTurnos(!showTurnos);
             }}
@@ -115,6 +120,11 @@ export default function FilterBar() {
           <Button
             variant={!showLicencias ? "default" : "outline"}
             size="sm"
+            className={
+              showLicencias
+                ? "rounded-[10px] border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                : "rounded-[10px] border border-blue-600 text-blue-600 bg-transparent hover:bg-blue-50"
+            }
             onClick={() => {
               setShowLicencias(!showLicencias);
             }}

@@ -240,7 +240,7 @@ export default function SchedulerCalendar({
           className="w-auto"
           defaultValue="timeline"
         >
-          <TabsList>
+          <TabsList className="space-x-2">
             {/* <TabsTrigger value="day">Día</TabsTrigger> */}
             {/* <TabsTrigger value="week">Semana</TabsTrigger> */}
             <TabsTrigger value="month">Mes</TabsTrigger>

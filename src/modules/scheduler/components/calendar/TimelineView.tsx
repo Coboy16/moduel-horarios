@@ -281,10 +281,13 @@ const TimelineView = forwardRef<HTMLDivElement, TimelineViewProps>(
           >
             {/* Cabecera de Horas (Fija arriba) */}
             <div
-              className="sticky top-0 z-20 flex border-b border-border bg-card"
+              className="sticky top-0 z-20 flex border-b border-border bg-blue-100"
               style={{ height: `${HEADER_HEIGHT}px`, width: "100%" }}
             >
-              {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+              {[
+                ...Array.from({ length: 18 }, (_, i) => i + 6), // 6-23
+                ...Array.from({ length: 6 }, (_, i) => i), // 0-5
+              ].map((hour) => (
                 <div
                   key={`header-${hour}`}
                   className="shrink-0 border-r border-border p-2 text-center text-xs font-medium flex items-center justify-center text-muted-foreground"
