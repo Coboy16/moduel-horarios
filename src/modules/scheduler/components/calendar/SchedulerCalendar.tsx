@@ -5,7 +5,7 @@ import { useFilters } from "../../hooks/useFilters";
 import { Button } from "../ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-// import WeekView from "./WeekView";
+import WeekView from "./WeekView";
 import MonthView from "./MonthView";
 import TimelineView from "./TimelineView";
 import CalendarHeader from "./CalendarHeader";
@@ -242,7 +242,7 @@ export default function SchedulerCalendar({
         >
           <TabsList className="space-x-2">
             {/* <TabsTrigger value="day">Día</TabsTrigger> */}
-            {/* <TabsTrigger value="week">Semana</TabsTrigger> */}
+            <TabsTrigger value="week">Semana</TabsTrigger>
             <TabsTrigger value="month">Mes</TabsTrigger>
             <TabsTrigger value="timeline">Línea de tiempo</TabsTrigger>
           </TabsList>
@@ -268,7 +268,7 @@ export default function SchedulerCalendar({
                 containerHeight={calendarHeight}
               />
             )} */}
-            {/* {currentView === "week" && selectedEmployees.length > 0 && (
+            {currentView === "week" && selectedEmployees.length >= 0 && (
               <WeekView
                 startDate={dateRange.start}
                 endDate={dateRange.end}
@@ -278,7 +278,7 @@ export default function SchedulerCalendar({
                 containerWidth={calendarWidth}
                 containerHeight={calendarHeight}
               />
-            )} */}
+            )}
             {currentView === "month" && selectedEmployees.length > 0 && (
               <MonthView startDate={dateRange.start} endDate={dateRange.end} />
             )}

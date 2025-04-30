@@ -1,285 +1,636 @@
-// "use client";
+// src/components/views/WeekView.tsx
+"use client";
 
-// import { useRef } from "react";
-// import { useUI } from "../../hooks/useUI";
-// import { useFilters } from "../../hooks/useFilters"; // Añadido para acceder al dateRange
-// import { format, addDays, isSameDay, isWithinInterval } from "date-fns";
-// import { es } from "date-fns/locale";
-// import type { Employee } from "../../interfaces/Employee";
-// import type { Event } from "../../interfaces/Event";
-// import type { Marking } from "../../interfaces/Marking";
-// import { formatTime } from "../../utils/dateUtils";
-// import EventItem from "./EventItem";
-// import MarkingPin from "./MarkingPin";
+import React from "react";
+import { cn } from "../../lib/utils";
+import { MapPin } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
+import {
+  Employee,
+  mockEmployees,
+  mockMarkings,
+  mockSchedules,
+  mockWorkedTimes,
+} from "../../tem/week_view";
 
-// interface WeekViewProps {
-//   startDate: Date;
-//   endDate: Date;
-//   events: Event[];
-//   markings: Marking[];
-//   employees: Employee[];
-//   containerWidth: number; // Cambié width por containerWidth para que coincida con el uso en SchedulerCalendar
-//   containerHeight: number; // Cambié height por containerHeight para que coincida con el uso en SchedulerCalendar
-// }
+// --- Constants for Layout ---
+const EMPLOYEE_COL_WIDTH = 160;
+const DAY_COL_WIDTH = 80;
+const HEADER_HEIGHT = 40;
+const HOUR_WIDTH = 80;
+const ROW_HEIGHT = 65;
+const TOTAL_LEFT_WIDTH = EMPLOYEE_COL_WIDTH + DAY_COL_WIDTH;
 
-// export default function WeekView({
-//   startDate,
-//   endDate,
-//   events,
-//   markings,
-//   employees,
-//   containerWidth,
-//   containerHeight,
-// }: WeekViewProps) {
-//   const { openContextMenu } = useUI();
-//   const { dateRange } = useFilters(); // Obtener el rango de fechas seleccionado
-//   const gridRef = useRef<HTMLDivElement>(null);
+// --- Static Data for Days ---
+const days = [
+  { key: "lun", date: "28/04" },
+  { key: "mar", date: "29/04" },
+  { key: "mié", date: "30/04" },
+  { key: "jue", date: "01/05" },
+  { key: "vie", date: "02/05" },
+  { key: "sáb", date: "03/05" },
+];
 
-//   // Hours to display
-//   const startHour = 6;
-//   const endHour = 22;
-//   const hours = Array.from(
-//     { length: endHour - startHour + 1 },
-//     (_, i) => i + startHour
-//   );
+// --- WeekView Props ---
+interface WeekViewProps {
+  employees?: Employee[];
+}
 
-//   // Days of the week
-//   const days = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
+// --- Dynamic WeekView Component ---
+export default function WeekView({ employees }: WeekViewProps) {
+  const employeesToDisplay =
+    employees && employees.length > 0 ? employees : mockEmployees;
 
-//   // Verificar si una fecha está dentro del rango seleccionado
-//   const isDateInSelectedRange = (date: Date) => {
-//     return isWithinInterval(date, {
-//       start: dateRange.start,
-//       end: dateRange.end,
-//     });
-//   };
+  const getRowIndex = (employeeId: string, dayKey: string): number => {
+    const employeeIndex = employeesToDisplay.findIndex(
+      (e) => e.id === employeeId
+    );
+    const dayIndex = days.findIndex((d) => d.key === dayKey);
+    if (employeeIndex === -1 || dayIndex === -1) return -1;
+    return employeeIndex * days.length + dayIndex;
+  };
 
-//   // Handle grid background context menu
-//   const handleGridContextMenu = (
-//     e: React.MouseEvent,
-//     date: Date,
-//     employeeId: string
-//   ) => {
-//     e.preventDefault();
+  const totalNumberOfEmployees = employeesToDisplay.length;
+  const totalNumberOfRows = totalNumberOfEmployees * days.length;
+  const totalTimelineContentHeight = totalNumberOfRows * ROW_HEIGHT;
+  const totalTimelineHeight = totalTimelineContentHeight + HEADER_HEIGHT;
+  const totalTimelineContentWidth = 24 * HOUR_WIDTH;
+  const hoursToDisplay = Array.from({ length: 24 }, (_, i) => i);
 
-//     // Calculate time from click position
-//     const rect = gridRef.current?.getBoundingClientRect();
-//     if (!rect) return;
+  if (totalNumberOfEmployees === 0) {
+    return (
+      <div className="flex justify-center items-center h-60 text-muted-foreground">
+        No hay datos de empleados para mostrar.
+      </div>
+    );
+  }
 
-//     const offsetY = e.clientY - rect.top;
-//     const hourHeight = (containerHeight - 50) / (endHour - startHour + 1); // 50px for header
-//     const hour = Math.floor(offsetY / hourHeight) + startHour;
-//     const minute = Math.floor((offsetY % hourHeight) / (hourHeight / 60));
+  const stripeCSS = `
+        .bg-stripes-pattern {
+           background-image: repeating-linear-gradient(
+            -45deg,
+            rgba(255, 255, 255, 0.7),
+            rgba(255, 255, 255, 0.7) 4px,
+            transparent 4px,
+            transparent 8px
+          );
+           background-color: transparent;
+        }
+        /* Optional: Style for fallback data */
+        .fallback-data {
+             opacity: 0.6; /* Make fallback data slightly transparent */
+             /* filter: grayscale(50%); /* Alternative visual cue */
+        }
+    `;
 
-//     if (hour < 0 || hour >= 24) return;
+  return (
+    <TooltipProvider>
+      <style>{stripeCSS}</style>
+      {/* !! NO CHANGE NEEDED HERE FOR HORIZONTAL SCROLL - Relies on parent containers and this overflow-auto */}
+      <div className="h-[calc(100vh-100px)] w-full overflow-auto border border-border rounded-md bg-card text-card-foreground relative">
+        <div className="flex min-w-max">
+          {/* Fixed Left Columns */}
+          <div
+            className="sticky left-0 z-30 shrink-0 border-r border-border shadow-sm flex flex-col bg-white"
+            style={{
+              width: `${TOTAL_LEFT_WIDTH}px`,
+              height: `${totalTimelineHeight}px`,
+            }}
+          >
+            {/* Header Corner */}
+            <div
+              className="border-b border-border flex items-center sticky top-0 z-10 bg-white"
+              style={{ height: `${HEADER_HEIGHT}px` }}
+            >
+              <div
+                className="p-2 font-medium text-sm text-center border-r border-border"
+                style={{ width: `${EMPLOYEE_COL_WIDTH}px` }}
+              >
+                Empleado
+              </div>
+              <div
+                className="p-2 font-medium text-sm text-center"
+                style={{ width: `${DAY_COL_WIDTH}px` }}
+              >
+                Día
+              </div>
+            </div>
+            {/* Employee/Day Cells Area */}
+            <div className="relative flex-1">
+              {employeesToDisplay.map((employee, employeeIndex) => (
+                <React.Fragment key={employee.id}>
+                  {/* Employee Cell Block */}
+                  <Tooltip delayDuration={150}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="absolute border-b border-r border-border flex flex-col justify-center p-2 bg-white hover:bg-gray-50 cursor-default"
+                        style={{
+                          top: `${employeeIndex * days.length * ROW_HEIGHT}px`,
+                          left: 0,
+                          height: `${days.length * ROW_HEIGHT}px`, // Span vertically
+                          width: `${EMPLOYEE_COL_WIDTH}px`,
+                        }}
+                      >
+                        <div className="font-semibold text-sm truncate">
+                          {employee.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {employee.department ?? "Sin Dept."}
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="right"
+                      align="start"
+                      className="bg-slate-800 text-white p-3 rounded-md shadow-lg text-xs border border-slate-700 w-60"
+                      sideOffset={5}
+                    >
+                      {/* Tooltip Content */}
+                      <div className="font-bold text-sm mb-2">
+                        {employee.name}
+                      </div>
+                      <div className="space-y-1">
+                        <div>
+                          <span className="font-medium">Num. documento:</span>{" "}
+                          {employee.documentNumber ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Tipo De Persona:</span>{" "}
+                          {employee.personType ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Contrato:</span>{" "}
+                          {employee.contractInfo ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Sede:</span>{" "}
+                          {employee.site ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Departamento:</span>{" "}
+                          {employee.department ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Cargo:</span>{" "}
+                          {employee.position ?? "N/A"}
+                        </div>
+                        <hr className="border-slate-600 my-2" />
+                        <div>
+                          <span className="font-medium">Trabajadas:</span>{" "}
+                          {employee.workedHours ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Ordinarias:</span>{" "}
+                          {employee.ordinaryHours ?? "N/A"}
+                        </div>
+                        <div>
+                          <span className="font-medium">Ausencias:</span>{" "}
+                          {employee.absenceHours ?? "N/A"}
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  {/* Day Cells */}
+                  <div
+                    className="absolute flex flex-col bg-white"
+                    style={{
+                      left: `${EMPLOYEE_COL_WIDTH}px`,
+                      top: `${employeeIndex * days.length * ROW_HEIGHT}px`,
+                      width: `${DAY_COL_WIDTH}px`,
+                    }}
+                  >
+                    {days.map((day) => (
+                      <div
+                        key={`${employee.id}-${day.key}-day`}
+                        className="border-b border-border p-2 flex items-center justify-center text-xs hover:bg-gray-50"
+                        style={{ height: `${ROW_HEIGHT}px` }}
+                      >
+                        <span className="font-bold mr-1">{day.key}</span>
+                        <span>{day.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          {/* Scrollable Timeline Area */}
+          <div className="flex-1 min-w-0 relative">
+            {/* !! NO CHANGE NEEDED HERE FOR HORIZONTAL SCROLL */}
+            <div
+              className="relative"
+              style={{
+                width: `${totalTimelineContentWidth}px`,
+                height: `${totalTimelineHeight}px`,
+              }}
+            >
+              {/* Hour Header */}
+              <div
+                className="sticky top-0 z-20 flex border-b border-border bg-blue-100"
+                style={{
+                  height: `${HEADER_HEIGHT}px`,
+                  width: `${totalTimelineContentWidth}px`,
+                }}
+              >
+                {hoursToDisplay.map((hour) => (
+                  <div
+                    key={`header-${hour}`}
+                    className="shrink-0 border-r border-blue-200 px-2 text-center text-xs font-medium flex items-center justify-center text-blue-800"
+                    style={{ width: `${HOUR_WIDTH}px` }}
+                  >
+                    {`${hour.toString().padStart(2, "0")}:00`}
+                  </div>
+                ))}
+              </div>
+              {/* Timeline Grid and Content Area */}
+              <div className="absolute top-0 left-0 w-full h-full">
+                {/* Background Grid Lines */}
+                {Array.from({ length: totalNumberOfRows }).map(
+                  (_, rowIndex) => (
+                    <div
+                      key={`row-bg-${rowIndex}`}
+                      className="absolute border-b border-gray-200"
+                      style={{
+                        top: `${rowIndex * ROW_HEIGHT + HEADER_HEIGHT}px`,
+                        left: 0,
+                        height: `${ROW_HEIGHT}px`,
+                        width: `${totalTimelineContentWidth}px`,
+                        zIndex: 1,
+                      }}
+                    >
+                      <div className="absolute inset-0 pointer-events-none z-0">
+                        {hoursToDisplay.map((hour) => (
+                          <React.Fragment key={`hour-line-${rowIndex}-${hour}`}>
+                            <div
+                              className="absolute top-0 bottom-0 border-r border-gray-200"
+                              style={{
+                                left: `${hour * HOUR_WIDTH}px`,
+                                width: "1px",
+                              }}
+                            />
+                            {[15, 30, 45].map((minute) => (
+                              <div
+                                key={`minute-line-${rowIndex}-${hour}-${minute}`}
+                                className="absolute top-0 bottom-0 w-px bg-gray-100"
+                                style={{
+                                  left: `${
+                                    hour * HOUR_WIDTH +
+                                    (minute / 60) * HOUR_WIDTH
+                                  }px`,
+                                }}
+                              />
+                            ))}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
+                {/* Content Layer (Bars and Markings) */}
+                <div className="absolute top-0 left-0 w-full h-full z-10">
+                  {employeesToDisplay.map((employee) =>
+                    days.map((day, dayIndex) => {
+                      // <-- Added dayIndex here
+                      const rowIndex = getRowIndex(employee.id, day.key);
+                      if (rowIndex === -1) return null;
 
-//     const clickTime = new Date(
-//       date.getFullYear(),
-//       date.getMonth(),
-//       date.getDate(),
-//       hour,
-//       minute
-//     );
+                      // --- Find ACTUAL data ---
+                      const actualSchedule = mockSchedules.find(
+                        (s) =>
+                          s.employeeId === employee.id && s.dayKey === day.key
+                      );
+                      const actualWorked = mockWorkedTimes.find(
+                        (w) =>
+                          w.employeeId === employee.id && w.dayKey === day.key
+                      );
+                      const actualMarkings = mockMarkings.filter(
+                        (m) =>
+                          m.employeeId === employee.id && m.dayKey === day.key
+                      );
 
-//     openContextMenu(
-//       {
-//         x: e.clientX,
-//         y: e.clientY,
-//       },
-//       "cell",
-//       {
-//         date: clickTime,
-//         employeeId,
-//       }
-//     );
-//   };
+                      // --- Determine data to RENDER (Actual or Fallback) ---
+                      let scheduleToRender = actualSchedule;
+                      let workedToRender = actualWorked;
+                      let markingsToRender = actualMarkings;
+                      let isFallbackData = false;
 
-//   // Position events in the grid
-//   const getEventPosition = (event: Event) => {
-//     const startTime = new Date(event.startTime);
-//     const endTime = new Date(event.endTime);
+                      // --- Check if Fallback data is needed ---
+                      if (
+                        !actualSchedule &&
+                        mockEmployees.length > 0 &&
+                        days.length > 0
+                      ) {
+                        isFallbackData = true;
+                        const fallbackEmpId = mockEmployees[0].id; // Use first mock employee as source
+                        // Cycle through days using modulo (%)
+                        const fallbackDayIndex = dayIndex % days.length;
+                        const fallbackDayKey = days[fallbackDayIndex]?.key;
 
-//     // Find which day of the week this event belongs to
-//     const dayIndex = days.findIndex((day) => isSameDay(day, startTime));
-//     if (dayIndex === -1) return null;
+                        if (fallbackDayKey) {
+                          // Ensure fallbackDayKey is valid
+                          scheduleToRender = mockSchedules.find(
+                            (s) =>
+                              s.employeeId === fallbackEmpId &&
+                              s.dayKey === fallbackDayKey
+                          );
+                          workedToRender = mockWorkedTimes.find(
+                            (w) =>
+                              w.employeeId === fallbackEmpId &&
+                              w.dayKey === fallbackDayKey
+                          );
+                          markingsToRender = mockMarkings.filter(
+                            (m) =>
+                              m.employeeId === fallbackEmpId &&
+                              m.dayKey === fallbackDayKey
+                          );
+                        } else {
+                          // Handle case where fallback day cannot be determined (should not happen with modulo)
+                          scheduleToRender = undefined;
+                          workedToRender = undefined;
+                          markingsToRender = [];
+                        }
+                      }
 
-//     // If event spans multiple days, cap it to the current day
-//     if (!isSameDay(startTime, endTime)) {
-//       endTime.setHours(23, 59, 59, 999);
-//     }
+                      // --- Prepare rendering layers ---
+                      const barLayer: React.ReactNode[] = [];
+                      const markingLayer: React.ReactNode[] = [];
+                      const topOffset = rowIndex * ROW_HEIGHT + HEADER_HEIGHT;
+                      const fallbackClass = isFallbackData
+                        ? "fallback-data"
+                        : ""; // Class for opacity
 
-//     const startHourDecimal = startTime.getHours() + startTime.getMinutes() / 60;
-//     const endHourDecimal = endTime.getHours() + endTime.getMinutes() / 60;
+                      // --- Render using ...ToRender variables ---
 
-//     const employeeIndex = employees.findIndex(
-//       (emp) => emp.id === event.employeeId
-//     );
-//     if (employeeIndex === -1) return null;
+                      // --- 1. Render SCHEDULE Bar ---
+                      if (scheduleToRender) {
+                        const left = scheduleToRender.startTime * HOUR_WIDTH;
+                        const width =
+                          (scheduleToRender.endTime -
+                            scheduleToRender.startTime) *
+                          HOUR_WIDTH;
+                        const verticalPosition = topOffset + ROW_HEIGHT * 0.5;
+                        const barHeight = ROW_HEIGHT * 0.25;
 
-//     const dayWidth = (containerWidth - 100) / days.length; // 100px for time column
-//     const employeeHeight = (containerHeight - 50) / employees.length; // 50px for header
+                        if (width > 0.1) {
+                          barLayer.push(
+                            <div
+                              key={`sched-${employee.id}-${day.key}`}
+                              className={cn(
+                                "absolute rounded-md overflow-hidden pointer-events-none",
+                                "bg-green-100 border border-green-300",
+                                fallbackClass // Apply fallback style if needed
+                              )}
+                              style={{
+                                top: `${verticalPosition}px`,
+                                left: `${left}px`,
+                                width: `${width}px`,
+                                height: `${barHeight}px`,
+                                zIndex: 5,
+                              }}
+                            >
+                              <span
+                                className={cn(
+                                  "absolute bottom-[-2px] left-1.5 text-[10px] font-medium pointer-events-none text-green-800"
+                                )}
+                              >
+                                {scheduleToRender.label}
+                              </span>
+                            </div>
+                          );
+                        }
 
-//     return {
-//       left: `${dayIndex * dayWidth + 100}px`,
-//       width: `${dayWidth - 10}px`,
-//       top: `${
-//         employeeIndex * employeeHeight +
-//         (startHourDecimal - startHour) * 60 +
-//         50
-//       }px`,
-//       height: `${(endHourDecimal - startHourDecimal) * 60}px`,
-//     };
-//   };
+                        // --- 2. Calculate and Render ABSENCE ---
+                        const absenceVerticalPosition =
+                          topOffset + ROW_HEIGHT * 0.18;
+                        const absenceHeight = ROW_HEIGHT * 0.25;
 
-//   // Position markings in the grid
-//   const getMarkingPosition = (marking: Marking) => {
-//     const markingTime = new Date(marking.time);
+                        if (workedToRender) {
+                          // Absence at start
+                          if (
+                            workedToRender.startTime >
+                            scheduleToRender.startTime
+                          ) {
+                            const absenceEndEarly = Math.min(
+                              workedToRender.startTime,
+                              scheduleToRender.endTime
+                            );
+                            const absenceWidth =
+                              (absenceEndEarly - scheduleToRender.startTime) *
+                              HOUR_WIDTH;
+                            if (absenceWidth > 0.1) {
+                              barLayer.push(
+                                <div
+                                  key={`abs-start-${employee.id}-${day.key}`}
+                                  className={cn(
+                                    "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none",
+                                    fallbackClass
+                                  )}
+                                  style={{
+                                    top: `${absenceVerticalPosition}px`,
+                                    left: `${
+                                      scheduleToRender.startTime * HOUR_WIDTH
+                                    }px`,
+                                    width: `${absenceWidth}px`,
+                                    height: `${absenceHeight}px`,
+                                    zIndex: 16,
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
+                                </div>
+                              );
+                            }
+                          }
+                          // Absence at end
+                          if (
+                            workedToRender.endTime < scheduleToRender.endTime
+                          ) {
+                            const absenceStartLate = Math.max(
+                              workedToRender.endTime,
+                              scheduleToRender.startTime
+                            );
+                            const absenceWidth =
+                              (scheduleToRender.endTime - absenceStartLate) *
+                              HOUR_WIDTH;
+                            if (absenceWidth > 0.1) {
+                              barLayer.push(
+                                <div
+                                  key={`abs-end-${employee.id}-${day.key}`}
+                                  className={cn(
+                                    "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none",
+                                    fallbackClass
+                                  )}
+                                  style={{
+                                    top: `${absenceVerticalPosition}px`,
+                                    left: `${absenceStartLate * HOUR_WIDTH}px`,
+                                    width: `${absenceWidth}px`,
+                                    height: `${absenceHeight}px`,
+                                    zIndex: 16,
+                                  }}
+                                >
+                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
+                                </div>
+                              );
+                            }
+                          }
+                        } else {
+                          // Full absence if schedule exists but no work
+                          const absenceWidth =
+                            (scheduleToRender.endTime -
+                              scheduleToRender.startTime) *
+                            HOUR_WIDTH;
+                          if (absenceWidth > 0.1) {
+                            barLayer.push(
+                              <div
+                                key={`abs-full-${employee.id}-${day.key}`}
+                                className={cn(
+                                  "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none",
+                                  fallbackClass
+                                )}
+                                style={{
+                                  top: `${absenceVerticalPosition}px`,
+                                  left: `${
+                                    scheduleToRender.startTime * HOUR_WIDTH
+                                  }px`,
+                                  width: `${absenceWidth}px`,
+                                  height: `${absenceHeight}px`,
+                                  zIndex: 16,
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
+                              </div>
+                            );
+                          }
+                        }
+                      }
 
-//     // Find which day of the week this marking belongs to
-//     const dayIndex = days.findIndex((day) => isSameDay(day, markingTime));
-//     if (dayIndex === -1) return null;
+                      // --- 3. Render WORKED & OVERTIME ---
+                      if (workedToRender) {
+                        const workedStart = workedToRender.startTime;
+                        const workedEnd = workedToRender.endTime;
+                        const scheduleStart =
+                          scheduleToRender?.startTime ?? -Infinity;
+                        const scheduleEnd =
+                          scheduleToRender?.endTime ?? Infinity;
 
-//     const hourDecimal = markingTime.getHours() + markingTime.getMinutes() / 60;
+                        const regularStart = Math.max(
+                          workedStart,
+                          scheduleStart
+                        );
+                        const regularEnd = Math.min(workedEnd, scheduleEnd);
+                        const regularWidth =
+                          regularEnd > regularStart
+                            ? (regularEnd - regularStart) * HOUR_WIDTH
+                            : 0;
 
-//     const employeeIndex = employees.findIndex(
-//       (emp) => emp.id === marking.employeeId
-//     );
-//     if (employeeIndex === -1) return null;
+                        const overtimeStart = Math.max(
+                          workedStart,
+                          scheduleEnd
+                        );
+                        const overtimeEnd = workedEnd;
+                        const overtimeWidth =
+                          overtimeEnd > overtimeStart
+                            ? (overtimeEnd - overtimeStart) * HOUR_WIDTH
+                            : 0;
 
-//     const dayWidth = (containerWidth - 100) / days.length; // 100px for time column
-//     const employeeHeight = (containerHeight - 50) / employees.length; // 50px for header
+                        const verticalPosition = topOffset + ROW_HEIGHT * 0.18;
+                        const barHeight = ROW_HEIGHT * 0.25;
 
-//     return {
-//       left: `${dayIndex * dayWidth + 100 + dayWidth / 2}px`,
-//       top: `${
-//         employeeIndex * employeeHeight + (hourDecimal - startHour) * 60 + 50
-//       }px`,
-//     };
-//   };
+                        if (regularWidth > 0.1) {
+                          barLayer.push(
+                            <div
+                              key={`workR-${employee.id}-${day.key}`}
+                              className={cn(
+                                "absolute bg-green-500 rounded-sm pointer-events-none",
+                                fallbackClass
+                              )}
+                              style={{
+                                top: `${verticalPosition}px`,
+                                left: `${regularStart * HOUR_WIDTH}px`,
+                                width: `${regularWidth}px`,
+                                height: `${barHeight}px`,
+                                zIndex: 15,
+                              }}
+                            />
+                          );
+                        }
+                        if (overtimeWidth > 0.1) {
+                          barLayer.push(
+                            <div
+                              key={`workOT-${employee.id}-${day.key}`}
+                              className={cn(
+                                "absolute bg-yellow-400 rounded-sm pointer-events-none",
+                                fallbackClass
+                              )}
+                              style={{
+                                top: `${verticalPosition}px`,
+                                left: `${overtimeStart * HOUR_WIDTH}px`,
+                                width: `${overtimeWidth}px`,
+                                height: `${barHeight}px`,
+                                zIndex: 14,
+                              }}
+                            />
+                          );
+                        }
+                      }
 
-//   return (
-//     <div className="h-full overflow-auto">
-//       <div className="relative" ref={gridRef}>
-//         {/* Time column */}
-//         <div className="absolute top-0 left-0 w-[100px] z-10">
-//           <div className="h-[50px] border-b border-r border-border bg-white"></div>
-//           {hours.map((hour) => (
-//             <div
-//               key={hour}
-//               className="h-[60px] border-b border-r border-border p-2 text-sm text-right"
-//             >
-//               {formatTime(hour, 0)}
-//             </div>
-//           ))}
-//         </div>
+                      // --- 4. Render MARKINGS ---
+                      markingsToRender.forEach((mark, index) => {
+                        const pinLeft = mark.time * HOUR_WIDTH;
+                        const IconComponent = mark.icon || MapPin;
+                        const pinTop =
+                          topOffset + ROW_HEIGHT - ROW_HEIGHT * 0.15;
 
-//         {/* Day columns */}
-//         <div className="ml-[100px]">
-//           {/* Header row with day names - Formato requerido para mostrar "28 de abril - 4 de mayo 2025" */}
-//           <div className="flex h-[50px] border-b border-border">
-//             <div className="w-full text-center font-medium py-3 border-b border-border bg-blue-50">
-//               {format(startDate, "d 'de' MMMM", { locale: es })} -{" "}
-//               {format(endDate, "d 'de' MMMM 'de' yyyy", { locale: es })}
-//             </div>
-//           </div>
+                        markingLayer.push(
+                          <div
+                            key={`mark-${employee.id}-${day.key}-${index}`}
+                            className={cn(
+                              "absolute z-30 flex items-center justify-center",
+                              fallbackClass
+                            )} // Apply fallback class
+                            style={{
+                              top: `${pinTop}px`,
+                              left: `${pinLeft}px`,
+                              transform: "translate(-50%, -50%)",
+                            }}
+                            title={`${mark.type} @ ${mark.time.toFixed(2)}h ${
+                              isFallbackData ? "(ejemplo)" : ""
+                            }`} // Add note to title
+                          >
+                            <IconComponent
+                              className={cn("w-3.5 h-3.5", mark.color)}
+                            />
+                          </div>
+                        );
+                      });
 
-//           {/* Días de la semana */}
-//           <div className="flex border-b border-border">
-//             {days.map((day, index) => (
-//               <div
-//                 key={index}
-//                 className={`flex-1 border-r border-border p-2 font-medium truncate ${
-//                   isDateInSelectedRange(day) ? "bg-blue-100" : ""
-//                 }`}
-//                 style={{
-//                   minWidth: `${(containerWidth - 100) / days.length}px`,
-//                 }}
-//               >
-//                 {format(day, "EEE d", { locale: es })}
-//               </div>
-//             ))}
-//           </div>
-
-//           {/* Grid cells */}
-//           <div className="flex">
-//             {days.map((day, dayIndex) => (
-//               <div
-//                 key={dayIndex}
-//                 className={`flex-1 relative ${
-//                   isDateInSelectedRange(day) ? "bg-blue-50/50" : ""
-//                 }`}
-//                 style={{
-//                   minWidth: `${(containerWidth - 100) / days.length}px`,
-//                 }}
-//               >
-//                 {employees.map((employee, employeeIndex) => (
-//                   <div
-//                     key={employee.id}
-//                     className="relative"
-//                     style={{
-//                       height: `${(containerHeight - 50) / employees.length}px`,
-//                     }}
-//                   >
-//                     {hours.map((hour) => (
-//                       <div
-//                         key={hour}
-//                         className={`h-[60px] border-b border-r border-border ${
-//                           isDateInSelectedRange(day) ? "bg-blue-50" : ""
-//                         }`}
-//                         onContextMenu={(e) =>
-//                           handleGridContextMenu(e, day, employee.id)
-//                         }
-//                       >
-//                         {/* 15-minute markers */}
-//                         {[15, 30, 45].map((minute) => (
-//                           <div
-//                             key={minute}
-//                             className="absolute w-full border-b border-dashed border-border/30"
-//                             style={{
-//                               top: `${(hour - startHour) * 60 + minute}px`,
-//                             }}
-//                           />
-//                         ))}
-//                       </div>
-//                     ))}
-
-//                     {/* Working hours background */}
-//                     <div
-//                       className={`absolute left-0 right-0 ${
-//                         isDateInSelectedRange(day)
-//                           ? "bg-green-100"
-//                           : "bg-green-50"
-//                       }`}
-//                       style={{
-//                         top: `${(9 - startHour) * 60}px`,
-//                         height: `${8 * 60}px`,
-//                       }}
-//                     />
-//                   </div>
-//                 ))}
-//               </div>
-//             ))}
-//           </div>
-//         </div>
-
-//         {/* Events */}
-//         {events.map((event) => {
-//           const position = getEventPosition(event);
-//           if (!position) return null;
-
-//           return <EventItem key={event.id} event={event} style={position} />;
-//         })}
-
-//         {/* Markings */}
-//         {markings.map((marking) => {
-//           const position = getMarkingPosition(marking);
-//           if (!position) return null;
-
-//           return (
-//             <MarkingPin key={marking.id} marking={marking} style={position} />
-//           );
-//         })}
-//       </div>
-//     </div>
-//   );
-// }
+                      // Render collected layers
+                      return (
+                        <React.Fragment
+                          key={`cell-content-${employee.id}-${day.key}`}
+                        >
+                          {barLayer}
+                          {markingLayer}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </div>{" "}
+                {/* End Content Layer */}
+              </div>{" "}
+              {/* End Timeline Grid/Content Area */}
+            </div>{" "}
+            {/* End Inner Scrollable Content */}
+          </div>{" "}
+          {/* End Scrollable Timeline Area */}
+        </div>{" "}
+        {/* End Main Flex Container */}
+      </div>{" "}
+      {/* End Outermost Scroll Container */}
+    </TooltipProvider>
+  );
+}
