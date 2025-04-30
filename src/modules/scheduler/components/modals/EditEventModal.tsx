@@ -131,7 +131,7 @@ export default function EditEventModal({}: EditEventModalProps) {
               )}
             />
 
-            <FormField
+            {/* <FormField
               control={form.control}
               name="type"
               rules={{ required: "El tipo es requerido" }}
@@ -161,7 +161,7 @@ export default function EditEventModal({}: EditEventModalProps) {
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            /> */}
 
             <FormField
               control={form.control}
@@ -176,7 +176,7 @@ export default function EditEventModal({}: EditEventModalProps) {
                         <SelectValue placeholder="Seleccionar empleado" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="bg-white">
                       {employees.map((employee) => (
                         <SelectItem key={employee.id} value={employee.id}>
                           {employee.name}

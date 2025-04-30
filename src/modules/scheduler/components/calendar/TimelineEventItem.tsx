@@ -18,7 +18,7 @@ import type {
   DraggableEventData,
   DraggableResizeHandleData,
 } from "../../interfaces/DndData";
-import { cn } from "../../lib/utils"; // Importar cn
+import { cn } from "../../lib/utils";
 
 interface TimelineEventItemProps {
   event: Event;
@@ -33,18 +33,18 @@ export default function TimelineEventItem({
   const [showTooltip, setShowTooltip] = useState(false);
 
   const eventColor = getEventTypeColor(event.type);
-  const uniquePrefix = `event-${event.id}`; // Prefijo único
+  const uniquePrefix = `event-${event.id}`;
 
   // --- Draggable Principal del Evento ---
   const draggableData: DraggableEventData = { type: "event", event };
   const {
     attributes: eventAttributes,
-    listeners: eventListeners, // Listener para mover el evento
+    listeners: eventListeners,
     setNodeRef: setEventNodeRef,
     transform: eventTransform,
     isDragging: isEventDragging,
   } = useDraggable({
-    id: uniquePrefix, // ID único para el evento
+    id: uniquePrefix,
     data: draggableData,
   });
 
@@ -52,18 +52,18 @@ export default function TimelineEventItem({
   const resizeLeftData: DraggableResizeHandleData = {
     type: "resizeHandle",
     edge: "left",
-    itemType: "event", // Especificar que es un evento
-    event: event, // Pasar el evento para referencia en dragEnd
-    markingId: "", // No aplica a eventos
-    relatedMarkingId: null, // No aplica a eventos
+    itemType: "event", // *** ASEGURARSE DE ESTO ***
+    event: event, // *** PASAR EL EVENTO ***
+    markingId: "", // No aplica
+    relatedMarkingId: null, // No aplica
   };
   const {
     attributes: leftAttributes,
-    listeners: leftListeners, // Listener para mover el handle izquierdo
+    listeners: leftListeners,
     setNodeRef: setLeftHandleRef,
     isDragging: isLeftDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-left`, // ID único
+    id: `${uniquePrefix}-resize-left`,
     data: resizeLeftData,
   });
 
@@ -71,22 +71,22 @@ export default function TimelineEventItem({
   const resizeRightData: DraggableResizeHandleData = {
     type: "resizeHandle",
     edge: "right",
-    itemType: "event",
-    event: event,
-    markingId: "",
-    relatedMarkingId: null,
+    itemType: "event", // *** ASEGURARSE DE ESTO ***
+    event: event, // *** PASAR EL EVENTO ***
+    markingId: "", // No aplica
+    relatedMarkingId: null, // No aplica
   };
   const {
     attributes: rightAttributes,
-    listeners: rightListeners, // Listener para mover el handle derecho
+    listeners: rightListeners,
     setNodeRef: setRightHandleRef,
     isDragging: isRightDragging,
   } = useDraggable({
-    id: `${uniquePrefix}-resize-right`, // ID único
+    id: `${uniquePrefix}-resize-right`,
     data: resizeRightData,
   });
 
-  // --- Envolver listeners de handles para log y stopPropagation ---
+  // --- Envolver listeners de handles ---
   const wrapHandleListeners = (
     handleName: string,
     listeners: ReturnType<typeof useDraggable>["listeners"]
@@ -98,7 +98,7 @@ export default function TimelineEventItem({
         console.log(
           `[TimelineEventItem Handle ${handleName}] Event: ${eventName} triggered`
         );
-        event.stopPropagation(); // DETENER propagación para los handles
+        event.stopPropagation();
         listeners[eventName as keyof typeof listeners]?.(event);
       };
     }
@@ -109,86 +109,56 @@ export default function TimelineEventItem({
   const loggedRightListeners = wrapHandleListeners("Right", rightListeners);
 
   // --- Estilo combinado ---
-  const combinedStyle = {
+  const isInteracting = isEventDragging || isLeftDragging || isRightDragging;
+  const combinedStyle: React.CSSProperties = {
     ...style,
-    // Aplicar transform solo si el evento principal se está arrastrando
     transform: isEventDragging
       ? CSS.Translate.toString(eventTransform)
       : undefined,
-    opacity: isEventDragging || isLeftDragging || isRightDragging ? 0.7 : 1,
+    opacity: isInteracting ? 0.7 : 1,
     cursor: isEventDragging ? "grabbing" : "grab",
-    zIndex:
-      isEventDragging || isLeftDragging || isRightDragging
-        ? 1000
-        : style.zIndex ?? 15, // Asegurar z-index por defecto
-    position: "absolute" as const, // Asegurar posición absoluta
+    zIndex: isInteracting ? 1000 : style.zIndex ?? 15,
+    position: "absolute" as const,
   };
 
-  // --- Handlers de UI ---
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevenir menú contextual de la fila
+    e.stopPropagation();
     openContextMenu({ x: e.clientX, y: e.clientY }, "event", event);
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevenir doble click en la fila
+    e.stopPropagation();
     openEditEventModal(event);
-  };
-
-  // --- Stop propagation para eventos no D&D en el item principal ---
-  const stopNonDndPropagation = (e: React.MouseEvent | React.TouchEvent) => {
-    if (e.type !== "pointerdown") {
-      // console.log(`[TimelineEventItem] Event ${e.type} stopped propagation`);
-      e.stopPropagation();
-    }
   };
 
   return (
     <div
-      ref={setEventNodeRef} // Ref para arrastrar el evento completo
+      ref={setEventNodeRef}
       style={combinedStyle}
       className={cn(
-        `rounded-md p-1 text-xs overflow-hidden border shadow-sm`, // Añadir sombra
+        `group/event-item rounded-md p-1 text-xs overflow-hidden border shadow-sm`, // Grupo para hover en handles
         eventColor.border,
         eventColor.bg,
         eventColor.text
       )}
       onContextMenu={handleContextMenu}
       onDoubleClick={handleDoubleClick}
-      {...eventAttributes} // Atributos D&D del evento
-      {...eventListeners} // Listeners D&D del evento
-      // Detener otros eventos para no interferir
-      onClick={stopNonDndPropagation}
+      {...eventAttributes}
+      {...eventListeners}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       aria-label={`Evento ${event.title}`}
     >
       <TooltipProvider>
-        <Tooltip
-          open={
-            showTooltip &&
-            !isEventDragging &&
-            !isLeftDragging &&
-            !isRightDragging
-          }
-          delayDuration={300}
-        >
+        <Tooltip open={showTooltip && !isInteracting} delayDuration={300}>
           <TooltipTrigger asChild>
-            {/* Contenido del evento */}
             <div className="h-full flex items-center pointer-events-none">
-              {" "}
-              {/* Contenido no interactivo */}
               <div className="font-medium truncate">{event.title}</div>
-              {/* Podrías añadir la hora aquí si el espacio lo permite */}
-              {/* <div className="ml-1 text-[10px] opacity-80 truncate">
-                 {formatTimeRange(new Date(event.startTime), new Date(event.endTime))}
-              </div> */}
             </div>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs z-[1100]">
-            {/* ... (contenido del tooltip sin cambios) ... */}
             <div className="space-y-1">
               <div className="font-medium">{event.title}</div>
               <div className="text-xs">Tipo: {event.type}</div>
@@ -210,38 +180,40 @@ export default function TimelineEventItem({
         </Tooltip>
       </TooltipProvider>
 
-      {/* --- Handle para Redimensionar Izquierda --- */}
+      {/* --- Handle Izquierdo --- */}
       <div
-        ref={setLeftHandleRef} // Ref para el handle izquierdo
-        {...leftAttributes} // Atributos D&D del handle
-        {...loggedLeftListeners} // Listeners D&D del handle (con stopPropagation)
+        ref={setLeftHandleRef}
+        {...leftAttributes}
+        {...loggedLeftListeners}
         className={cn(
-          "absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-[100] flex items-center justify-center", // z-index alto
-          "opacity-0 hover:opacity-100 focus:opacity-100 group-hover/menu-item:opacity-50" // Mostrar al hacer hover/focus
+          "absolute left-[-2px] top-[-2px] bottom-[-2px] w-2 cursor-ew-resize z-[20]", // Aumentar área de agarre y z-index
+          "flex items-center justify-center",
+          // Mostrar sutilmente, más visible en hover del grupo padre
+          "opacity-0 group-hover/event-item:opacity-50 hover:!opacity-100 transition-opacity"
         )}
         style={{ touchAction: "none" }}
         aria-label="Redimensionar inicio"
       >
-        <div className="w-1 h-4 bg-gray-500 rounded-full pointer-events-none" />{" "}
-        {/* Indicador visual */}
-        {/* <GripVertical className="h-3 w-3 text-gray-500 pointer-events-none" /> */}
+        {/* Indicador visual del handle */}
+        <div className="w-1 h-1/2 bg-gray-500 rounded-full opacity-75 group-hover/event-item:opacity-100 pointer-events-none" />
       </div>
 
-      {/* --- Handle para Redimensionar Derecha --- */}
+      {/* --- Handle Derecho --- */}
       <div
-        ref={setRightHandleRef} // Ref para el handle derecho
-        {...rightAttributes} // Atributos D&D del handle
-        {...loggedRightListeners} // Listeners D&D del handle (con stopPropagation)
+        ref={setRightHandleRef}
+        {...rightAttributes}
+        {...loggedRightListeners}
         className={cn(
-          "absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-[100] flex items-center justify-center", // z-index alto
-          "opacity-0 hover:opacity-100 focus:opacity-100 group-hover/menu-item:opacity-50" // Mostrar al hacer hover/focus
+          "absolute right-[-2px] top-[-2px] bottom-[-2px] w-2 cursor-ew-resize z-[20]", // Aumentar área de agarre y z-index
+          "flex items-center justify-center",
+          // Mostrar sutilmente, más visible en hover del grupo padre
+          "opacity-0 group-hover/event-item:opacity-50 hover:!opacity-100 transition-opacity"
         )}
         style={{ touchAction: "none" }}
         aria-label="Redimensionar fin"
       >
-        <div className="w-1 h-4 bg-gray-500 rounded-full pointer-events-none" />{" "}
-        {/* Indicador visual */}
-        {/* <GripVertical className="h-3 w-3 text-gray-500 pointer-events-none" /> */}
+        {/* Indicador visual del handle */}
+        <div className="w-1 h-1/2 bg-gray-500 rounded-full opacity-75 group-hover/event-item:opacity-100 pointer-events-none" />
       </div>
     </div>
   );

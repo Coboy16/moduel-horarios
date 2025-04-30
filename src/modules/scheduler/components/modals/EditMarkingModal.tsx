@@ -1,28 +1,48 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useUI } from "../../hooks/useUI"
-import { useMarkings } from "../../hooks/useMarkings"
-import { useEmployees } from "../../hooks/useEmployees"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../ui/form"
-import { X } from "lucide-react"
-import { formatDateForInput, formatTimeForInput } from "../../utils/dateUtils"
-import type { Marking } from "../../interfaces/Marking"
-import { useForm } from "react-hook-form"
+import { useState, useEffect } from "react";
+import { useUI } from "../../hooks/useUI";
+import { useMarkings } from "../../hooks/useMarkings";
+import { useEmployees } from "../../hooks/useEmployees";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "../ui/form";
+import { X } from "lucide-react";
+import { formatDateForInput, formatTimeForInput } from "../../utils/dateUtils";
+import type { Marking } from "../../interfaces/Marking";
+import { useForm } from "react-hook-form";
 
-type EditMarkingModalProps = {}
+type EditMarkingModalProps = {};
 
 export default function EditMarkingModal({}: EditMarkingModalProps) {
-  const { closeEditMarkingModal, editMarkingData } = useUI()
-  const { updateMarking, deleteMarking, markingTypes, markingStatuses } = useMarkings()
-  const { employees } = useEmployees()
+  const { closeEditMarkingModal, editMarkingData } = useUI();
+  const { updateMarking, deleteMarking, markingTypes, markingStatuses } =
+    useMarkings();
+  const { employees } = useEmployees();
 
-  const [markingDate, setMarkingDate] = useState("")
-  const [markingTime, setMarkingTime] = useState("")
+  const [markingDate, setMarkingDate] = useState("");
+  const [markingTime, setMarkingTime] = useState("");
 
   const form = useForm({
     defaultValues: {
@@ -31,30 +51,30 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
       status: "",
       location: "",
     },
-  })
+  });
 
   // Set initial values based on marking data
   useEffect(() => {
     if (editMarkingData) {
-      const marking = editMarkingData
-      const markingDateTime = new Date(marking.time)
+      const marking = editMarkingData;
+      const markingDateTime = new Date(marking.time);
 
       form.reset({
         type: marking.type,
         employeeId: marking.employeeId,
         status: marking.status,
         location: marking.location || "",
-      })
+      });
 
-      setMarkingDate(formatDateForInput(markingDateTime))
-      setMarkingTime(formatTimeForInput(markingDateTime))
+      setMarkingDate(formatDateForInput(markingDateTime));
+      setMarkingTime(formatTimeForInput(markingDateTime));
     }
-  }, [editMarkingData, form])
+  }, [editMarkingData, form]);
 
   const onSubmit = form.handleSubmit((data) => {
-    if (!editMarkingData) return
+    if (!editMarkingData) return;
 
-    const markingDateTime = new Date(`${markingDate}T${markingTime}`)
+    const markingDateTime = new Date(`${markingDate}T${markingTime}`);
 
     const updatedMarking: Marking = {
       ...editMarkingData,
@@ -63,29 +83,26 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
       time: markingDateTime.toISOString(),
       status: data.status,
       location: data.location,
-    }
+    };
 
-    updateMarking(updatedMarking)
-    closeEditMarkingModal()
-  })
+    updateMarking(updatedMarking);
+    closeEditMarkingModal();
+  });
 
   const handleDelete = () => {
     if (editMarkingData) {
-      deleteMarking(editMarkingData.id)
-      closeEditMarkingModal()
+      deleteMarking(editMarkingData.id);
+      closeEditMarkingModal();
     }
-  }
+  };
 
-  if (!editMarkingData) return null
+  if (!editMarkingData) return null;
 
   return (
     <Dialog open={true} onOpenChange={closeEditMarkingModal}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Editar Marcaje</DialogTitle>
-          <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={closeEditMarkingModal}>
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
         <Form {...form}>
@@ -145,11 +162,21 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <FormLabel>Fecha</FormLabel>
-                <Input type="date" value={markingDate} onChange={(e) => setMarkingDate(e.target.value)} required />
+                <Input
+                  type="date"
+                  value={markingDate}
+                  onChange={(e) => setMarkingDate(e.target.value)}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <FormLabel>Hora</FormLabel>
-                <Input type="time" value={markingTime} onChange={(e) => setMarkingTime(e.target.value)} required />
+                <Input
+                  type="time"
+                  value={markingTime}
+                  onChange={(e) => setMarkingTime(e.target.value)}
+                  required
+                />
               </div>
             </div>
 
@@ -194,11 +221,19 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
             />
 
             <DialogFooter className="gap-2">
-              <Button type="button" variant="destructive" onClick={handleDelete}>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+              >
                 Eliminar
               </Button>
               <div className="flex-1"></div>
-              <Button type="button" variant="outline" onClick={closeEditMarkingModal}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeEditMarkingModal}
+              >
                 Cancelar
               </Button>
               <Button type="submit">Guardar</Button>
@@ -207,5 +242,5 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
         </Form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
