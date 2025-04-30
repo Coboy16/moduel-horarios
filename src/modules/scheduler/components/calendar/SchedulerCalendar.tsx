@@ -279,8 +279,12 @@ export default function SchedulerCalendar({
                 containerHeight={calendarHeight}
               />
             )}
-            {currentView === "month" && selectedEmployees.length > 0 && (
-              <MonthView startDate={dateRange.start} endDate={dateRange.end} />
+            {currentView === "month" && selectedEmployees.length >= 0 && (
+              <MonthView
+                startDate={dateRange.start}
+                endDate={dateRange.end}
+                employees={selectedEmployees}
+              />
             )}
             {currentView === "timeline" && (
               <TimelineView
