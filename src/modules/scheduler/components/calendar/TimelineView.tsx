@@ -33,7 +33,6 @@ const HOUR_WIDTH = 80;
 const ROW_HEIGHT = 50;
 const STANDARD_WORK_MINUTES = 8 * 60;
 
-// --- Droppable Row Component ---
 interface DroppableRowProps {
   employeeId: string;
   employeeIndex: number;
