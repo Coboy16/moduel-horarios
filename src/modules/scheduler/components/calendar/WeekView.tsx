@@ -2,9 +2,17 @@
 // src/components/views/WeekView.tsx
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { cn } from "../../lib/utils"; // Asegúrate que esta ruta sea correcta
-import { MapPin } from "lucide-react";
+import React, { useState, useCallback, useRef } from "react";
+import { cn } from "../../lib/utils";
+import {
+  MapPin,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Info as InfoIcon,
+  X,
+} from "lucide-react";
+import { format } from "date-fns";
 import {
   Tooltip,
   TooltipContent,
@@ -17,15 +25,23 @@ import {
   mockMarkings,
   mockSchedules,
   mockWorkedTimes,
-} from "../../tem/week_view"; // Ajusta ruta
+} from "../../tem/week_view";
 
-// Importa los componentes personalizados de menú
-import { CustomContextMenu } from "./menus/CustomContextMenu"; // Asegúrate que la ruta es correcta
-import { WorkedBarContextMenuContent } from "./menus/WorkedBarContextMenu"; // Asegúrate que la ruta es correcta
-import { GridCellContextMenuContent } from "./menus/GridCellContextMenu"; // Asegúrate que la ruta es correcta
-import { EmployeeContextMenuContent } from "./menus/EmployeeContextMenu"; // Asegúrate que la ruta es correcta
+import { CustomContextMenu } from "./menus/CustomContextMenu";
+import { WorkedBarContextMenuContent } from "./menus/WorkedBarContextMenu";
+import { GridCellContextMenuContent } from "./menus/GridCellContextMenu";
+import { EmployeeContextMenuContent } from "./menus/EmployeeContextMenu";
 
-// --- Constants for Layout ---
+import { Modal } from "./forms/Modal";
+import { AddMarkingForm } from "./forms/AddMarkingForm";
+import { AddLeaveForm } from "./forms/AddLeaveForm";
+import { AddShiftForm } from "./forms/AddShiftForm";
+// Assuming EmployeeMarkingsTable is defined below or imported correctly
+// import { EmployeeMarkingsTable } from "./EmployeeMarkingsTable";
+import { Button } from "../ui/button";
+import { Marking } from "../../interfaces/Marking";
+import { EmployeeMarkingsTable } from "./forms/EmployeeMarkingsTable";
+
 const EMPLOYEE_COL_WIDTH = 160;
 const DAY_COL_WIDTH = 80;
 const HEADER_HEIGHT = 40;
@@ -33,7 +49,6 @@ const HOUR_WIDTH = 80;
 const ROW_HEIGHT = 65;
 const TOTAL_LEFT_WIDTH = EMPLOYEE_COL_WIDTH + DAY_COL_WIDTH;
 
-// --- Static Data for Days ---
 const days = [
   { key: "lun", date: "28/04" },
   { key: "mar", date: "29/04" },
@@ -42,62 +57,110 @@ const days = [
   { key: "vie", date: "02/05" },
   { key: "sáb", date: "03/05" },
 ];
+const currentYear = new Date().getFullYear();
 
-// --- WeekView Props ---
 interface WeekViewProps {
   employees?: Employee[];
 }
 
-// --- Estado para el menú contextual ---
 interface MenuState {
   isOpen: boolean;
   position: { x: number; y: number };
   type: "worked" | "grid" | "employee" | null;
-  data: any; // Para pasar datos relevantes (empId, dayKey, scheduleId, clickedTime, formattedDateTime etc.)
+  data: any;
 }
 
-// --- Dynamic WeekView Component ---
+interface ModalFormData {
+  employeeId: string;
+  dayKey: string;
+  initialDate: string;
+  initialTime: string;
+}
+
+interface ToastState {
+  id: number;
+  isVisible: boolean;
+  message: string;
+  type: "success" | "info" | "warning" | "error";
+}
+
 export default function WeekView({ employees }: WeekViewProps) {
   const employeesToDisplay =
     employees && employees.length > 0 ? employees : mockEmployees;
 
-  // --- Estado del Menú ---
   const [menuState, setMenuState] = useState<MenuState>({
     isOpen: false,
     position: { x: 0, y: 0 },
     type: null,
     data: null,
   });
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [formModalType, setFormModalType] = useState<
+    "marking" | "leave" | "shift" | null
+  >(null);
+  const [formModalData, setFormModalData] = useState<ModalFormData | null>(
+    null
+  );
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [isMarkingsModalOpen, setIsMarkingsModalOpen] = useState(false);
+  const [markingsModalData, setMarkingsModalData] = useState<{
+    employee: Employee | null;
+    markings: Marking[];
+  }>({ employee: null, markings: [] });
+  const [isPasteConfirmOpen, setIsPasteConfirmOpen] = useState(false);
+  const [pasteEmployeeId, setPasteEmployeeId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastState[]>([]);
+  const toastIdRef = useRef(0);
 
-  // --- Helper Functions ---
-  const getRowIndex = (employeeId: string, dayKey: string): number => {
-    const employeeIndex = employeesToDisplay.findIndex(
-      (e) => e.id === employeeId
-    );
-    const dayIndex = days.findIndex((d) => d.key === dayKey);
-    if (employeeIndex === -1 || dayIndex === -1) return -1;
-    return employeeIndex * days.length + dayIndex;
-  };
+  const getRowIndex = useCallback(
+    (employeeId: string, dayKey: string): number => {
+      const employeeIndex = employeesToDisplay.findIndex(
+        (e) => e.id === employeeId
+      );
+      const dayIndex = days.findIndex((d) => d.key === dayKey);
+      if (employeeIndex === -1 || dayIndex === -1) return -1;
+      return employeeIndex * days.length + dayIndex;
+    },
+    [employeesToDisplay]
+  );
 
-  const calculateTimeFromOffset = (
-    offsetX: number,
-    timelineWidth: number
-  ): number => {
-    if (timelineWidth <= 0) return 0;
-    const hours = (offsetX / timelineWidth) * 24;
-    return Math.round(hours * 4) / 4; // Redondea al cuarto de hora
-  };
+  const calculateTimeFromOffset = useCallback(
+    (offsetX: number, timelineWidth: number): number => {
+      if (timelineWidth <= 0 || isNaN(offsetX) || offsetX < 0) return 0;
+      // Clamp offsetX to be within timeline bounds before calculating
+      const clampedOffsetX = Math.max(0, Math.min(offsetX, timelineWidth));
+      const hours = (clampedOffsetX / timelineWidth) * 24;
+      const calculatedHours = Math.round(hours * 4) / 4;
+      return isNaN(calculatedHours)
+        ? 0
+        : Math.max(0, Math.min(24, calculatedHours));
+    },
+    []
+  );
 
-  const formatTime = (decimalTime: number): string => {
+  const formatTime = useCallback((decimalTime: number): string => {
+    if (
+      decimalTime == null ||
+      isNaN(decimalTime) ||
+      decimalTime < 0 ||
+      decimalTime > 24
+    ) {
+      // Handle potential null/undefined from data or calculation errors
+      const now = new Date();
+      return `${now.getHours().toString().padStart(2, "0")}:${now
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`;
+    }
     const totalMinutes = Math.round(decimalTime * 60);
-    const hours = Math.floor(totalMinutes / 60);
+    const hours = Math.floor(totalMinutes / 60) % 24;
     const minutes = totalMinutes % 60;
     return `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
       .padStart(2, "0")}`;
-  };
+  }, []);
 
-  // --- Layout Calculations ---
   const totalNumberOfEmployees = employeesToDisplay.length;
   const totalNumberOfRows = totalNumberOfEmployees * days.length;
   const totalTimelineContentHeight = totalNumberOfRows * ROW_HEIGHT;
@@ -105,46 +168,53 @@ export default function WeekView({ employees }: WeekViewProps) {
   const totalTimelineContentWidth = 24 * HOUR_WIDTH;
   const hoursToDisplay = Array.from({ length: 24 }, (_, i) => i);
 
-  // --- Handlers para abrir y cerrar menús ---
-  const handleContextMenu = useCallback(
+  const showToast = useCallback(
     (
-      event: React.MouseEvent<HTMLDivElement>,
-      type: "worked" | "grid" | "employee",
-      data: any
+      message: string,
+      type: ToastState["type"] = "success",
+      duration = 3000
     ) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      let menuData = data;
-      if (type === "grid") {
-        const currentTarget = event.currentTarget as Element;
-        const rect = currentTarget.getBoundingClientRect();
-        const offsetX = event.clientX - rect.left;
-        const clickedTime = calculateTimeFromOffset(
-          offsetX,
-          totalTimelineContentWidth
+      toastIdRef.current += 1;
+      const newToast: ToastState = {
+        id: toastIdRef.current,
+        isVisible: true,
+        message,
+        type,
+      };
+      setToasts((prev) => [...prev.filter((t) => t.isVisible), newToast]);
+      setTimeout(() => {
+        setToasts((prev) =>
+          prev.map((t) =>
+            t.id === newToast.id ? { ...t, isVisible: false } : t
+          )
         );
-        const formattedTime = formatTime(clickedTime);
-        const dayInfo = days.find((d) => d.key === data.dayKey);
-        const dateStr = dayInfo?.date
-          ? dayInfo.date + (dayInfo.date.length <= 5 ? "/2024" : "")
-          : "??/??";
-        menuData = {
-          ...data,
-          clickedTime,
-          formattedDateTime: `${dateStr} - ${formattedTime}`,
-        };
-      }
-
-      setMenuState({
-        isOpen: true,
-        position: { x: event.clientX, y: event.clientY }, // Usa coordenadas del viewport
-        type: type,
-        data: menuData,
-      });
+        setTimeout(
+          () => setToasts((prev) => prev.filter((t) => t.isVisible)),
+          500
+        );
+      }, duration);
     },
-    [totalTimelineContentWidth]
-  ); // Incluye dependencia
+    []
+  );
+
+  const closeToast = (id: number) => {
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isVisible: false } : t))
+    );
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.isVisible)), 500);
+  };
+
+  const closeAllModals = useCallback(() => {
+    setIsFormModalOpen(false);
+    setFormModalType(null);
+    setFormModalData(null);
+    setIsSuccessModalOpen(false);
+    setSuccessMessage("");
+    setIsMarkingsModalOpen(false);
+    setMarkingsModalData({ employee: null, markings: [] });
+    setIsPasteConfirmOpen(false);
+    setPasteEmployeeId(null);
+  }, []);
 
   const closeContextMenu = useCallback(() => {
     setMenuState((prev) => ({
@@ -155,7 +225,94 @@ export default function WeekView({ employees }: WeekViewProps) {
     }));
   }, []);
 
-  // --- Placeholder Handlers para acciones del menú (llama a closeContextMenu) ---
+  const handleContextMenu = useCallback(
+    (
+      event: React.MouseEvent<HTMLDivElement>,
+      type: "worked" | "grid" | "employee",
+      data: any
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAllModals();
+      closeContextMenu();
+
+      let menuData = data;
+      if (type === "grid") {
+        const currentTarget = event.currentTarget as Element;
+        const container = currentTarget.closest(".overflow-auto");
+        const containerRect = container?.getBoundingClientRect();
+        const containerScrollLeft = container ? container.scrollLeft : 0;
+
+        // X position relative to the viewport start
+        const clientX = event.clientX;
+        // Grid container's start position in the viewport
+        const gridContainerViewportStart =
+          (containerRect?.left ?? 0) + TOTAL_LEFT_WIDTH;
+        // Calculate offset relative to the *start of the scrollable grid area*
+        const gridOffsetX =
+          clientX - gridContainerViewportStart + containerScrollLeft;
+
+        const clickedTimeDecimal = calculateTimeFromOffset(
+          gridOffsetX,
+          totalTimelineContentWidth
+        );
+        const formattedTime = formatTime(clickedTimeDecimal);
+        const dayInfo = days.find((d) => d.key === data.dayKey);
+        const dateStr = dayInfo
+          ? `${dayInfo.date}/${currentYear}`
+          : `??/??/${currentYear}`;
+
+        const initialDateObj = dayInfo
+          ? new Date(
+              `${currentYear}-${dayInfo.date.split("/")[1]}-${
+                dayInfo.date.split("/")[0]
+              }`
+            )
+          : new Date();
+        const formattedDateForInput = format(initialDateObj, "yyyy-MM-dd");
+
+        menuData = {
+          ...data,
+          clickedTime: clickedTimeDecimal,
+          formattedDateTime: `${dateStr} - ${formattedTime}`,
+          initialDate: formattedDateForInput,
+          initialTime: formattedTime,
+        };
+      }
+
+      setMenuState({
+        isOpen: true,
+        position: { x: event.clientX, y: event.clientY },
+        type: type,
+        data: menuData,
+      });
+    },
+    [
+      closeAllModals,
+      closeContextMenu,
+      calculateTimeFromOffset,
+      formatTime,
+      totalTimelineContentWidth,
+    ]
+  );
+
+  const openFormModal = (
+    type: "marking" | "leave" | "shift",
+    data: ModalFormData
+  ) => {
+    closeAllModals();
+    closeContextMenu();
+    setFormModalData(data);
+    setFormModalType(type);
+    setIsFormModalOpen(true);
+  };
+
+  const handleFormSuccess = (message: string) => {
+    closeAllModals();
+    setSuccessMessage(message);
+    setIsSuccessModalOpen(true);
+  };
+
   const handleViewDetails = (id: string) => {
     console.log("Ver detalle:", id);
     closeContextMenu();
@@ -168,40 +325,111 @@ export default function WeekView({ employees }: WeekViewProps) {
     console.log("Eliminar:", id);
     closeContextMenu();
   };
-  const handleAddMarking = (empId: string, day: string, time: number) => {
-    console.log("Agregar Marcaje:", empId, day, time);
-    closeContextMenu();
+
+  const handleAddMarking = () => {
+    if (menuState.type === "grid" && menuState.data) {
+      const { employeeId, dayKey, initialDate, initialTime } = menuState.data;
+      openFormModal("marking", {
+        employeeId,
+        dayKey,
+        initialDate,
+        initialTime,
+      });
+    }
   };
-  const handleAddLeave = (empId: string, day: string, time: number) => {
-    console.log("Agregar Licencia:", empId, day, time);
-    closeContextMenu();
+  const handleAddLeave = () => {
+    if (menuState.type === "grid" && menuState.data) {
+      const { employeeId, dayKey, initialDate, initialTime } = menuState.data;
+      openFormModal("leave", { employeeId, dayKey, initialDate, initialTime });
+    }
   };
-  const handleAddShift = (empId: string, day: string, time: number) => {
-    console.log("Agregar Turno:", empId, day, time);
-    closeContextMenu();
+  const handleAddShift = () => {
+    if (menuState.type === "grid" && menuState.data) {
+      const { employeeId, dayKey, initialDate } = menuState.data;
+      openFormModal("shift", {
+        employeeId,
+        dayKey,
+        initialDate,
+        initialTime: "00:00",
+      });
+    }
   };
+
   const handleViewEmpMarkings = (empId: string) => {
-    console.log("Ver Marcajes Emp:", empId);
     closeContextMenu();
+    closeAllModals();
+    const employee = employeesToDisplay.find((e) => e.id === empId);
+    if (!employee) return;
+
+    const employeeMarkings = mockMarkings
+      .filter((m) => m.employeeId === empId)
+      .map((m) => {
+        const dayInfo = days.find((d) => d.key === m.dayKey);
+        const dateStr = dayInfo
+          ? `${dayInfo.date}/${currentYear}`
+          : `??/??/${currentYear}`;
+        return {
+          ...m,
+          dateStr: dateStr,
+          site: "Sede Desconocida",
+          status: "VALID",
+          type: m.type as
+            | "ENTRADA"
+            | "SALIDA"
+            | "INICIO_DESCANSO"
+            | "FIN_DESCANSO",
+          time: m.time.toString(),
+        };
+      })
+      .sort((a, b) => {
+        const timeA = Number(a.time ?? 0);
+        const timeB = Number(b.time ?? 0);
+        const dateComparison = a.dateStr.localeCompare(b.dateStr);
+        if (dateComparison !== 0) return dateComparison;
+        return timeA - timeB;
+      });
+
+    setMarkingsModalData({ employee, markings: employeeMarkings });
+    setIsMarkingsModalOpen(true);
   };
+
   const handleCopyEmpLeave = (empId: string) => {
     console.log("Copiar Licencias Emp:", empId);
-    closeContextMenu();
-  };
-  const handleCopyEmpSchedules = (empId: string) => {
-    console.log("Copiar Horarios Emp:", empId);
-    closeContextMenu();
-  };
-  const handleCopyEmpAll = (empId: string) => {
-    console.log("Copiar Todo Emp:", empId);
-    closeContextMenu();
-  };
-  const handlePasteEmp = (empId: string) => {
-    console.log("Pegar Emp:", empId);
+    showToast("Licencias y permisos copiados", "success");
     closeContextMenu();
   };
 
-  // --- Render Checks ---
+  const handleCopyEmpSchedules = (empId: string) => {
+    console.log("Copiar Horarios Emp:", empId);
+    showToast("Horarios copiados", "success");
+    closeContextMenu();
+  };
+
+  const handleCopyEmpAll = (empId: string) => {
+    console.log("Copiar Todo Emp:", empId);
+    showToast("Todos los datos copiados", "success");
+    closeContextMenu();
+  };
+
+  const handlePasteEmp = (empId: string) => {
+    closeContextMenu();
+    closeAllModals();
+    setPasteEmployeeId(empId);
+    setIsPasteConfirmOpen(true);
+  };
+
+  const handleConfirmPaste = () => {
+    console.log("Pegando datos en Emp:", pasteEmployeeId);
+    setIsPasteConfirmOpen(false);
+    showToast(`Datos pegados`, "success");
+    setPasteEmployeeId(null);
+  };
+
+  const handleCancelPaste = () => {
+    setIsPasteConfirmOpen(false);
+    setPasteEmployeeId(null);
+  };
+
   if (totalNumberOfEmployees === 0) {
     return (
       <div className="flex justify-center items-center h-60 text-muted-foreground">
@@ -210,33 +438,37 @@ export default function WeekView({ employees }: WeekViewProps) {
     );
   }
 
-  // --- Embedded CSS ---
-  const stripeCSS = `
-        .bg-stripes-pattern {
-           background-image: repeating-linear-gradient(
-            -45deg,
-            rgba(255, 255, 255, 0.7),
-            rgba(255, 255, 255, 0.7) 4px,
-            transparent 4px,
-            transparent 8px
-          );
-           background-color: transparent;
-        }
-        /* .fallback-data { opacity: 0.6; } */
-    `;
+  const stripeCSS = `.bg-stripes-pattern { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.7) 4px, transparent 4px, transparent 8px); background-color: transparent; }`;
+
+  const toastBaseClasses =
+    "fixed bottom-5 right-5 z-[100] max-w-sm w-full p-4 rounded-lg shadow-lg flex items-start space-x-3 transition-all duration-300 ease-in-out";
+  const toastTypeClasses = {
+    success: "bg-green-100 border border-green-300 text-green-800",
+    info: "bg-blue-100 border border-blue-300 text-blue-800",
+    warning: "bg-yellow-100 border border-yellow-300 text-yellow-800",
+    error: "bg-red-100 border border-red-300 text-red-800",
+  };
+  const toastIcon = {
+    success: <CheckCircle className="h-5 w-5 text-green-600" />,
+    info: <InfoIcon className="h-5 w-5 text-blue-600" />,
+    warning: <AlertTriangle className="h-5 w-5 text-yellow-600" />,
+    error: <XCircle className="h-5 w-5 text-red-600" />,
+  };
 
   return (
     <TooltipProvider>
       <style>{stripeCSS}</style>
-      {/* Contenedor Principal con overflow y cierre de menú al hacer click */}
       <div
         className="h-[calc(100vh-100px)] w-full overflow-auto border border-border rounded-md bg-card text-card-foreground relative"
-        onClick={() => menuState.isOpen && closeContextMenu()}
+        onClick={(e) => {
+          if (
+            menuState.isOpen &&
+            !(e.target as Element).closest(".custom-context-menu")
+          )
+            closeContextMenu();
+        }}
       >
         <div className="flex min-w-max">
-          {" "}
-          {/* Asegura scroll horizontal */}
-          {/* Columna Izquierda Fija */}
           <div
             className="sticky left-0 z-30 shrink-0 border-r border-border shadow-sm flex flex-col bg-white"
             style={{
@@ -244,7 +476,6 @@ export default function WeekView({ employees }: WeekViewProps) {
               height: `${totalTimelineHeight}px`,
             }}
           >
-            {/* Header Esquina */}
             <div
               className="border-b border-border flex items-center sticky top-0 z-10 bg-white"
               style={{ height: `${HEADER_HEIGHT}px` }}
@@ -262,11 +493,9 @@ export default function WeekView({ employees }: WeekViewProps) {
                 Día
               </div>
             </div>
-            {/* Celdas Empleado/Día */}
             <div className="relative flex-1">
               {employeesToDisplay.map((employee, employeeIndex) => (
                 <React.Fragment key={employee.id}>
-                  {/* Celda Empleado con Context Menu */}
                   <div
                     onContextMenu={(e) =>
                       handleContextMenu(e, "employee", {
@@ -345,8 +574,6 @@ export default function WeekView({ employees }: WeekViewProps) {
                       </TooltipContent>
                     </Tooltip>
                   </div>
-
-                  {/* Celdas Día */}
                   <div
                     className="absolute flex flex-col bg-white"
                     style={{
@@ -370,9 +597,8 @@ export default function WeekView({ employees }: WeekViewProps) {
               ))}
             </div>
           </div>
-          {/* Area Timeline Scrollable */}
+
           <div className="flex-1 min-w-0 relative">
-            {/* Contenedor Interno Timeline */}
             <div
               className="relative"
               style={{
@@ -380,7 +606,6 @@ export default function WeekView({ employees }: WeekViewProps) {
                 height: `${totalTimelineHeight}px`,
               }}
             >
-              {/* Header Horas */}
               <div
                 className="sticky top-0 z-20 flex border-b border-border bg-blue-100"
                 style={{
@@ -393,14 +618,10 @@ export default function WeekView({ employees }: WeekViewProps) {
                     key={`header-${hour}`}
                     className="shrink-0 border-r border-blue-200 px-2 text-center text-xs font-medium flex items-center justify-center text-blue-800"
                     style={{ width: `${HOUR_WIDTH}px` }}
-                  >
-                    {`${hour.toString().padStart(2, "0")}:00`}
-                  </div>
+                  >{`${hour.toString().padStart(2, "0")}:00`}</div>
                 ))}
               </div>
-              {/* Grid y Contenido */}
               <div className="absolute top-0 left-0 w-full h-full">
-                {/* Fondo Grid con Context Menu */}
                 {Array.from({ length: totalNumberOfRows }).map(
                   (_, localRowIndex) => {
                     const employeeIndex = Math.floor(
@@ -411,7 +632,6 @@ export default function WeekView({ employees }: WeekViewProps) {
                     const day = days[dayIndex];
                     if (!employee || !day) return null;
                     const top = localRowIndex * ROW_HEIGHT + HEADER_HEIGHT;
-
                     return (
                       <div
                         key={`row-bg-${localRowIndex}`}
@@ -430,19 +650,21 @@ export default function WeekView({ employees }: WeekViewProps) {
                           zIndex: 2,
                         }}
                       >
-                        {/* Líneas Verticales */}
+                        {" "}
                         <div className="absolute inset-0 pointer-events-none z-0">
+                          {" "}
                           {hoursToDisplay.map((hour) => (
                             <React.Fragment
                               key={`hour-line-${localRowIndex}-${hour}`}
                             >
+                              {" "}
                               <div
                                 className="absolute top-0 bottom-0 border-r border-gray-200"
                                 style={{
                                   left: `${hour * HOUR_WIDTH}px`,
                                   width: "1px",
                                 }}
-                              />
+                              />{" "}
                               {[15, 30, 45].map((minute) => (
                                 <div
                                   key={`minute-line-${localRowIndex}-${hour}-${minute}`}
@@ -454,24 +676,19 @@ export default function WeekView({ employees }: WeekViewProps) {
                                     }px`,
                                   }}
                                 />
-                              ))}
+                              ))}{" "}
                             </React.Fragment>
-                          ))}
-                        </div>
+                          ))}{" "}
+                        </div>{" "}
                       </div>
                     );
                   }
                 )}
-                {/* Capa Contenido (Barras/Marcajes) */}
                 <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none">
-                  {" "}
-                  {/* Capa sin eventos */}
                   {employeesToDisplay.map((employee) =>
-                    days.map((day, dayIndex) => {
+                    days.map((day) => {
                       const rowIndex = getRowIndex(employee.id, day.key);
                       if (rowIndex === -1) return null;
-
-                      // --- Búsqueda de Datos ---
                       const actualSchedule = mockSchedules.find(
                         (s) =>
                           s.employeeId === employee.id && s.dayKey === day.key
@@ -484,75 +701,29 @@ export default function WeekView({ employees }: WeekViewProps) {
                         (m) =>
                           m.employeeId === employee.id && m.dayKey === day.key
                       );
-                      let scheduleToRender = actualSchedule;
-                      let workedToRender = actualWorked;
-                      let markingsToRender = actualMarkings;
-                      let isFallbackData = false;
-
-                      if (
-                        !actualSchedule &&
-                        mockEmployees.length > 0 &&
-                        days.length > 0
-                      ) {
-                        // isFallbackData = true;
-                        const fallbackEmpId = mockEmployees[0].id;
-                        const fallbackDayIndex = dayIndex % days.length;
-                        const fallbackDayKey = days[fallbackDayIndex]?.key;
-                        if (fallbackDayKey) {
-                          scheduleToRender = mockSchedules.find(
-                            (s) =>
-                              s.employeeId === fallbackEmpId &&
-                              s.dayKey === fallbackDayKey
-                          );
-                          workedToRender = mockWorkedTimes.find(
-                            (w) =>
-                              w.employeeId === fallbackEmpId &&
-                              w.dayKey === fallbackDayKey
-                          );
-                          markingsToRender = mockMarkings.filter(
-                            (m) =>
-                              m.employeeId === fallbackEmpId &&
-                              m.dayKey === fallbackDayKey
-                          );
-                        } else {
-                          scheduleToRender = undefined;
-                          workedToRender = undefined;
-                          markingsToRender = [];
-                        }
-                      }
-
-                      // --- Preparación de Layers ---
                       const barLayer: React.ReactNode[] = [];
                       const markingLayer: React.ReactNode[] = [];
                       const topOffset = rowIndex * ROW_HEIGHT + HEADER_HEIGHT;
-                      const fallbackClass = isFallbackData
-                        ? "fallback-data"
-                        : "";
 
-                      // --- Render Barras con Context Menu ---
-                      if (scheduleToRender) {
-                        const left = scheduleToRender.startTime * HOUR_WIDTH;
+                      if (actualSchedule) {
+                        const left = actualSchedule.startTime * HOUR_WIDTH;
                         const width =
-                          (scheduleToRender.endTime -
-                            scheduleToRender.startTime) *
+                          (actualSchedule.endTime - actualSchedule.startTime) *
                           HOUR_WIDTH;
                         const verticalPosition = topOffset + ROW_HEIGHT * 0.5;
                         const barHeight = ROW_HEIGHT * 0.25;
-                        if (width > 0.1) {
+                        if (width > 0.1)
                           barLayer.push(
                             <div
                               key={`sched-${employee.id}-${day.key}`}
                               onContextMenu={(e) =>
                                 handleContextMenu(e, "worked", {
-                                  scheduleId: scheduleToRender.id,
+                                  scheduleId: actualSchedule.id,
                                   type: "schedule",
                                 })
                               }
                               className={cn(
-                                "absolute rounded-md overflow-hidden",
-                                "bg-green-100 border border-green-300",
-                                fallbackClass,
-                                "pointer-events-auto cursor-context-menu"
+                                "absolute rounded-md overflow-hidden bg-green-100 border border-green-300 pointer-events-auto cursor-context-menu"
                               )}
                               style={{
                                 top: `${verticalPosition}px`,
@@ -562,70 +733,63 @@ export default function WeekView({ employees }: WeekViewProps) {
                                 zIndex: 5,
                               }}
                             >
+                              {" "}
                               <span
                                 className={cn(
                                   "absolute bottom-[-2px] left-1.5 text-[10px] font-medium pointer-events-none text-green-800"
                                 )}
                               >
-                                {scheduleToRender.label}
-                              </span>
+                                {actualSchedule.label}
+                              </span>{" "}
                             </div>
                           );
-                        }
-                        // Ausencia (Visual)
                         const absenceVerticalPosition =
                           topOffset + ROW_HEIGHT * 0.18;
                         const absenceHeight = ROW_HEIGHT * 0.25;
-                        if (workedToRender) {
+                        if (actualWorked) {
                           if (
-                            workedToRender.startTime >
-                            scheduleToRender.startTime
+                            actualWorked.startTime > actualSchedule.startTime
                           ) {
                             const aE = Math.min(
-                              workedToRender.startTime,
-                              scheduleToRender.endTime
+                              actualWorked.startTime,
+                              actualSchedule.endTime
                             );
                             const aW =
-                              (aE - scheduleToRender.startTime) * HOUR_WIDTH;
-                            if (aW > 0.1) {
+                              (aE - actualSchedule.startTime) * HOUR_WIDTH;
+                            if (aW > 0.1)
                               barLayer.push(
                                 <div
                                   key={`abs-start-${employee.id}-${day.key}`}
                                   className={cn(
-                                    "absolute bg-red-200 R-sm O-h P-e-n",
-                                    fallbackClass
+                                    "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
                                   )}
                                   style={{
                                     top: `${absenceVerticalPosition}px`,
                                     left: `${
-                                      scheduleToRender.startTime * HOUR_WIDTH
+                                      actualSchedule.startTime * HOUR_WIDTH
                                     }px`,
                                     width: `${aW}px`,
                                     height: `${absenceHeight}px`,
                                     zIndex: 16,
                                   }}
                                 >
-                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 P-e-n"></div>
+                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
                                 </div>
                               );
-                            }
                           }
-                          if (
-                            workedToRender.endTime < scheduleToRender.endTime
-                          ) {
+                          if (actualWorked.endTime < actualSchedule.endTime) {
                             const aS = Math.max(
-                              workedToRender.endTime,
-                              scheduleToRender.startTime
+                              actualWorked.endTime,
+                              actualSchedule.startTime
                             );
                             const aW =
-                              (scheduleToRender.endTime - aS) * HOUR_WIDTH;
-                            if (aW > 0.1) {
+                              (actualSchedule.endTime - aS) * HOUR_WIDTH;
+                            if (aW > 0.1)
                               barLayer.push(
                                 <div
                                   key={`abs-end-${employee.id}-${day.key}`}
                                   className={cn(
-                                    "absolute bg-red-200 R-sm O-h P-e-n",
-                                    fallbackClass
+                                    "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
                                   )}
                                   style={{
                                     top: `${absenceVerticalPosition}px`,
@@ -635,48 +799,43 @@ export default function WeekView({ employees }: WeekViewProps) {
                                     zIndex: 16,
                                   }}
                                 >
-                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 P-e-n"></div>
+                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
                                 </div>
                               );
-                            }
                           }
                         } else {
                           const aW =
-                            (scheduleToRender.endTime -
-                              scheduleToRender.startTime) *
+                            (actualSchedule.endTime -
+                              actualSchedule.startTime) *
                             HOUR_WIDTH;
-                          if (aW > 0.1) {
+                          if (aW > 0.1)
                             barLayer.push(
                               <div
                                 key={`abs-full-${employee.id}-${day.key}`}
                                 className={cn(
-                                  "absolute bg-red-200 R-sm O-h P-e-n",
-                                  fallbackClass
+                                  "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
                                 )}
                                 style={{
                                   top: `${absenceVerticalPosition}px`,
                                   left: `${
-                                    scheduleToRender.startTime * HOUR_WIDTH
+                                    actualSchedule.startTime * HOUR_WIDTH
                                   }px`,
                                   width: `${aW}px`,
                                   height: `${absenceHeight}px`,
                                   zIndex: 16,
                                 }}
                               >
-                                <div className="absolute inset-0 bg-stripes-pattern opacity-70 P-e-n"></div>
+                                <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
                               </div>
                             );
-                          }
                         }
                       }
-
-                      if (workedToRender) {
-                        const workedStart = workedToRender.startTime;
-                        const workedEnd = workedToRender.endTime;
+                      if (actualWorked) {
+                        const workedStart = actualWorked.startTime;
+                        const workedEnd = actualWorked.endTime;
                         const scheduleStart =
-                          scheduleToRender?.startTime ?? -Infinity;
-                        const scheduleEnd =
-                          scheduleToRender?.endTime ?? Infinity;
+                          actualSchedule?.startTime ?? -Infinity;
+                        const scheduleEnd = actualSchedule?.endTime ?? Infinity;
                         const regularStart = Math.max(
                           workedStart,
                           scheduleStart
@@ -697,21 +856,18 @@ export default function WeekView({ employees }: WeekViewProps) {
                             : 0;
                         const verticalPosition = topOffset + ROW_HEIGHT * 0.18;
                         const barHeight = ROW_HEIGHT * 0.25;
-
-                        if (regularWidth > 0.1) {
+                        if (regularWidth > 0.1)
                           barLayer.push(
                             <div
                               key={`workR-${employee.id}-${day.key}`}
                               onContextMenu={(e) =>
                                 handleContextMenu(e, "worked", {
-                                  workedId: workedToRender.id,
+                                  workedId: actualWorked.id,
                                   type: "regular",
                                 })
                               }
                               className={cn(
-                                "absolute bg-green-500 rounded-sm",
-                                fallbackClass,
-                                "pointer-events-auto cursor-context-menu"
+                                "absolute bg-green-500 rounded-sm pointer-events-auto cursor-context-menu"
                               )}
                               style={{
                                 top: `${verticalPosition}px`,
@@ -722,21 +878,18 @@ export default function WeekView({ employees }: WeekViewProps) {
                               }}
                             />
                           );
-                        }
-                        if (overtimeWidth > 0.1) {
+                        if (overtimeWidth > 0.1)
                           barLayer.push(
                             <div
                               key={`workOT-${employee.id}-${day.key}`}
                               onContextMenu={(e) =>
                                 handleContextMenu(e, "worked", {
-                                  workedId: workedToRender.id,
+                                  workedId: actualWorked.id,
                                   type: "overtime",
                                 })
                               }
                               className={cn(
-                                "absolute bg-yellow-400 rounded-sm",
-                                fallbackClass,
-                                "pointer-events-auto cursor-context-menu"
+                                "absolute bg-yellow-400 rounded-sm pointer-events-auto cursor-context-menu"
                               )}
                               style={{
                                 top: `${verticalPosition}px`,
@@ -747,11 +900,8 @@ export default function WeekView({ employees }: WeekViewProps) {
                               }}
                             />
                           );
-                        }
                       }
-
-                      // --- Render Marcajes ---
-                      markingsToRender.forEach((mark, index) => {
+                      actualMarkings.forEach((mark, index) => {
                         const pinLeft = mark.time * HOUR_WIDTH;
                         const IconComponent = mark.icon || MapPin;
                         const pinTop =
@@ -760,21 +910,19 @@ export default function WeekView({ employees }: WeekViewProps) {
                           <div
                             key={`mark-${employee.id}-${day.key}-${index}`}
                             className={cn(
-                              "absolute z-30 flex items-center justify-center pointer-events-auto",
-                              fallbackClass
+                              "absolute z-30 flex items-center justify-center pointer-events-auto"
                             )}
                             style={{
                               top: `${pinTop}px`,
                               left: `${pinLeft}px`,
                               transform: "translate(-50%, -50%)",
                             }}
-                            title={`${mark.type} @ ${formatTime(mark.time)} ${
-                              isFallbackData ? "(ejemplo)" : ""
-                            }`}
+                            title={`${mark.type} @ ${formatTime(mark.time)}`}
                           >
+                            {" "}
                             <IconComponent
                               className={cn("w-3.5 h-3.5", mark.color)}
-                            />
+                            />{" "}
                           </div>
                         );
                       });
@@ -789,21 +937,129 @@ export default function WeekView({ employees }: WeekViewProps) {
                       );
                     })
                   )}
-                </div>{" "}
-                {/* Fin Capa Contenido */}
-              </div>{" "}
-              {/* Fin Grid y Contenido */}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <Modal
+          isOpen={isFormModalOpen}
+          onClose={closeAllModals}
+          title={
+            formModalType === "marking"
+              ? "Nuevo Marcaje"
+              : formModalType === "leave"
+              ? "Agregar Licencia/Permiso"
+              : formModalType === "shift"
+              ? "Agregar Horario"
+              : ""
+          }
+          size={
+            formModalType === "leave"
+              ? "lg"
+              : formModalType === "shift"
+              ? "xl"
+              : "md"
+          }
+        >
+          {formModalType === "marking" && formModalData && (
+            <AddMarkingForm
+              initialDate={formModalData.initialDate}
+              initialTime={formModalData.initialTime}
+              onClose={closeAllModals}
+              onSubmitSuccess={handleFormSuccess}
+            />
+          )}
+          {formModalType === "leave" && formModalData && (
+            <AddLeaveForm
+              initialStartDate={formModalData.initialDate}
+              initialStartTime={formModalData.initialTime}
+              onClose={closeAllModals}
+              onSubmitSuccess={handleFormSuccess}
+            />
+          )}
+          {formModalType === "shift" && formModalData && (
+            <AddShiftForm
+              initialStartDate={formModalData.initialDate}
+              onClose={closeAllModals}
+              onSubmitSuccess={handleFormSuccess}
+            />
+          )}
+        </Modal>
+        //TODO: CAMBIAR POR EL GENERICO
+        <Modal
+          isOpen={isSuccessModalOpen}
+          onClose={closeAllModals}
+          title="Operación Exitosa"
+          size="sm"
+        >
+          <div className="text-center py-4">
+            {" "}
+            <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-3" />{" "}
+            <p className="text-gray-700">{successMessage}</p>{" "}
+            <Button
+              onClick={closeAllModals}
+              className="mt-5 bg-blue-500 hover:bg-blue-600"
+            >
+              Aceptar
+            </Button>{" "}
+          </div>
+        </Modal>
+        <Modal
+          isOpen={isMarkingsModalOpen}
+          onClose={closeAllModals}
+          title={`Marcajes de ${
+            markingsModalData.employee?.name || "Empleado"
+          }`}
+          size="xl"
+        >
+          <div className="p-0">
+            {" "}
+            {/* Eliminamos el padding que viene por defecto */}
+            {markingsModalData.employee && (
+              <EmployeeMarkingsTable
+                markings={markingsModalData.markings}
+                employeeName={markingsModalData.employee.name}
+                onClose={closeAllModals}
+              />
+            )}
+          </div>
+        </Modal>
+        <Modal
+          isOpen={isPasteConfirmOpen}
+          onClose={handleCancelPaste}
+          title="Confirmar Acción"
+          size="sm"
+        >
+          <div className="p-5">
+            {" "}
+            <div className="flex items-center mb-4">
+              {" "}
+              <AlertTriangle className="h-6 w-6 text-yellow-500 mr-3" />{" "}
+              <p className="text-gray-700 font-medium">¿Está seguro?</p>{" "}
             </div>{" "}
-            {/* Fin Contenedor Timeline Interno */}
-          </div>{" "}
-          {/* Fin Area Timeline Scrollable */}
-        </div>{" "}
-        {/* Fin Flex Container Principal */}
-        {/* Renderiza el Menú Contextual Customizado */}
+            <p className="text-sm text-gray-600 mb-5">
+              Esta acción puede sobrescribir datos existentes.
+            </p>{" "}
+            <div className="flex justify-end gap-3">
+              {" "}
+              <Button variant="outline" onClick={handleCancelPaste}>
+                Cancelar
+              </Button>{" "}
+              <Button
+                className="bg-blue-500 hover:bg-blue-600"
+                onClick={handleConfirmPaste}
+              >
+                Confirmar
+              </Button>{" "}
+            </div>{" "}
+          </div>
+        </Modal>
         <CustomContextMenu
           isOpen={menuState.isOpen}
           position={menuState.position}
           onClose={closeContextMenu}
+          className="custom-context-menu"
         >
           {menuState.type === "worked" && menuState.data && (
             <WorkedBarContextMenuContent
@@ -830,27 +1086,9 @@ export default function WeekView({ employees }: WeekViewProps) {
               formattedDateTime={
                 menuState.data.formattedDateTime || "??/?? - ??:??"
               }
-              onAddMarking={() =>
-                handleAddMarking(
-                  menuState.data.employeeId,
-                  menuState.data.dayKey,
-                  menuState.data.clickedTime
-                )
-              }
-              onAddLeave={() =>
-                handleAddLeave(
-                  menuState.data.employeeId,
-                  menuState.data.dayKey,
-                  menuState.data.clickedTime
-                )
-              }
-              onAddShift={() =>
-                handleAddShift(
-                  menuState.data.employeeId,
-                  menuState.data.dayKey,
-                  menuState.data.clickedTime
-                )
-              }
+              onAddMarking={handleAddMarking}
+              onAddLeave={handleAddLeave}
+              onAddShift={handleAddShift}
             />
           )}
           {menuState.type === "employee" && menuState.data && (
@@ -867,8 +1105,34 @@ export default function WeekView({ employees }: WeekViewProps) {
             />
           )}
         </CustomContextMenu>
-      </div>{" "}
-      {/* Fin Contenedor Principal */}
+        <div className="fixed bottom-0 right-0 p-4 space-y-2 z-[100]">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={cn(
+                toastBaseClasses,
+                toastTypeClasses[toast.type],
+                toast.isVisible
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-4 pointer-events-none"
+              )}
+              role="alert"
+            >
+              <div className="flex-shrink-0">{toastIcon[toast.type]}</div>
+              <div className="flex-grow text-sm font-medium">
+                {toast.message}
+              </div>
+              <button
+                onClick={() => closeToast(toast.id)}
+                className="ml-auto -mx-1.5 -my-1.5 p-1.5 inline-flex h-8 w-8 rounded-lg focus:ring-2 focus:ring-offset-1"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </TooltipProvider>
   );
 }
