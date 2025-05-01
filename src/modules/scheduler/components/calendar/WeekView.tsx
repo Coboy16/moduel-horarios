@@ -379,6 +379,9 @@ export default function WeekView({ employees }: WeekViewProps) {
             | "INICIO_DESCANSO"
             | "FIN_DESCANSO",
           time: m.time.toString(),
+          details: "Sin detalles",
+          createdBy: "Sistema",
+          markingType: m.type,
         };
       })
       .sort((a, b) => {

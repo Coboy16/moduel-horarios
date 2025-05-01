@@ -1,7 +1,6 @@
-// src/components/forms/AddMarkingForm.tsx
 "use client";
-import React, { useState } from "react";
-import { MapPin as FileText, Tag, Navigation } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { MapPin, Tag, Navigation, FileText } from "lucide-react";
 import { Label } from "../../ui/label";
 import { Textarea } from "../../ui/textarea";
 import {
@@ -13,44 +12,66 @@ import {
 } from "../../ui/select";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
-
-// --- Mock Data Interna ---
-const mockMarkingTypes = [
-  "Turno Mañana M1",
-  "Turno Tarde T1",
-  "Turno Noche N1",
-  "Entrada General",
-  "Salida General",
-];
-const mockLocations = [
-  "Sede Hotel Dep. Sucursal Piura",
-  "Oficina Principal Lima",
-  "Almacén Arequipa",
-  "Cliente Corp. XYZ",
-  "Remoto",
-];
-// --- Fin Mock Data ---
+import {
+  mockMarkingTypes,
+  mockLocations,
+  mockSites,
+} from "../../../tem/mockData";
+import { Marking } from "../../../interfaces/Marking";
 
 interface AddMarkingFormProps {
-  initialDate: string;
-  initialTime: string;
+  initialDate?: string;
+  initialTime?: string;
+  markingToEdit?: Marking | null; // Para edición
+  isEditing?: boolean;
   onClose: () => void;
   onSubmitSuccess: (message: string) => void;
 }
 
 export function AddMarkingForm({
-  initialDate,
-  initialTime,
+  initialDate = new Date().toISOString().split("T")[0],
+  initialTime = new Date().toTimeString().slice(0, 5),
+  markingToEdit = null,
+  isEditing = false,
   onClose,
   onSubmitSuccess,
 }: AddMarkingFormProps) {
-  const [date, setDate] = useState(initialDate);
-  const [time, setTime] = useState(initialTime);
-  const [markingType, setMarkingType] = useState(mockMarkingTypes[0] || ""); // Usa mock data
-  const [location, setLocation] = useState(mockLocations[0] || ""); // Usa mock data
-  const [details, setDetails] = useState("");
+  // Estados para los campos del formulario
+  const [date, setDate] = useState<string>(initialDate);
+  const [time, setTime] = useState<string>(initialTime);
+  const [markingType, setMarkingType] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+  const [site, setSite] = useState<string>("");
+  const [details, setDetails] = useState<string>("");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Función para formatear la hora en función del formato
+  const formatTimeForDisplay = (timeStr: string) => {
+    try {
+      const timeNum = parseFloat(timeStr);
+      const hours = Math.floor(timeNum);
+      const minutes = Math.floor((timeNum % 1) * 60);
+      return `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")}`;
+    } catch (e) {
+      console.error("Error al formatear la hora:", e);
+      return timeStr.includes(":") ? timeStr : `${timeStr}:00`;
+    }
+  };
+
+  // Si hay un marcaje para editar, inicializar los campos con sus valores
+  useEffect(() => {
+    if (markingToEdit) {
+      setDate(markingToEdit.dateStr || initialDate);
+      setTime(formatTimeForDisplay(markingToEdit.time));
+      setMarkingType(markingToEdit.markingType || "");
+      setLocation(markingToEdit.location || "");
+      setSite(markingToEdit.site || "");
+      setDetails(markingToEdit.details || "");
+    }
+  }, [markingToEdit, initialDate]);
 
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
@@ -65,6 +86,7 @@ export function AddMarkingForm({
     }
     if (!markingType) newErrors.markingType = "Seleccione un tipo de marcaje.";
     if (!location) newErrors.location = "Seleccione una ubicación.";
+    if (!site) newErrors.site = "Seleccione una sede.";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -74,16 +96,47 @@ export function AddMarkingForm({
     e.preventDefault();
     if (!validate()) return;
     setIsSubmitting(true);
-    console.log("Enviando datos de marcaje:", {
-      date,
-      time,
+
+    // Convertir hora HH:MM a formato string (para mantener consistencia con el modelo)
+    const [hours, minutes] = time.split(":").map(Number);
+    const timeDecimal = hours + minutes / 60;
+
+    const markingData: Marking = {
+      id: markingToEdit?.id || `mark-${Date.now()}`,
+      dateStr: date,
+      time: timeDecimal.toString(),
       markingType,
       location,
+      site,
       details,
-    });
+      // Determinar el tipo basado en el tipo de marcaje seleccionado
+      type:
+        markingType.includes("Entrada") || markingType.includes("Mañana")
+          ? "ENTRADA"
+          : markingType.includes("Salida") ||
+            markingType.includes("Tarde") ||
+            markingType.includes("Noche")
+          ? "SALIDA"
+          : markingType.includes("Pausa")
+          ? "INICIO_DESCANSO"
+          : "FIN_DESCANSO",
+      createdBy: markingToEdit?.createdBy || "Usuario manual",
+      employeeId: markingToEdit?.employeeId || "emp-123",
+      status: markingToEdit?.status || "PENDING",
+    };
+
+    console.log(
+      `${isEditing ? "Actualizando" : "Creando"} marcaje:`,
+      markingData
+    );
+
+    // Simular una petición al servidor
     await new Promise((resolve) => setTimeout(resolve, 1000));
+
     setIsSubmitting(false);
-    onSubmitSuccess("Marcaje agregado correctamente.");
+    onSubmitSuccess(
+      `Marcaje ${isEditing ? "actualizado" : "agregado"} correctamente.`
+    );
   };
 
   return (
@@ -93,6 +146,7 @@ export function AddMarkingForm({
           <Label htmlFor="date">Día</Label>
           <Input
             id="date"
+            type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
@@ -116,8 +170,29 @@ export function AddMarkingForm({
           )}
         </div>
       </div>
+
       <div>
-        <Label htmlFor="markingType">Marcaje</Label>
+        <Label htmlFor="site">Sede</Label>
+        <Select value={site} onValueChange={setSite}>
+          <SelectTrigger id="site">
+            <SelectValue placeholder="Seleccione sede..." />
+          </SelectTrigger>
+          <SelectContent className="bg-white">
+            {mockSites.map((siteOption) => (
+              <SelectItem key={siteOption} value={siteOption}>
+                <MapPin className="inline-block mr-2 h-3 w-3 text-gray-500" />
+                {siteOption}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.site && (
+          <p className="text-red-500 text-xs mt-1">{errors.site}</p>
+        )}
+      </div>
+
+      <div>
+        <Label htmlFor="markingType">Tipo de Marcaje</Label>
         <Select value={markingType} onValueChange={setMarkingType}>
           <SelectTrigger id="markingType">
             <SelectValue placeholder="Seleccione tipo..." />
@@ -135,6 +210,7 @@ export function AddMarkingForm({
           <p className="text-red-500 text-xs mt-1">{errors.markingType}</p>
         )}
       </div>
+
       <div>
         <Label htmlFor="location">Ubicación</Label>
         <Select value={location} onValueChange={setLocation}>
@@ -154,6 +230,7 @@ export function AddMarkingForm({
           <p className="text-red-500 text-xs mt-1">{errors.location}</p>
         )}
       </div>
+
       <div>
         <Label htmlFor="details">Detalles</Label>
         <div className="relative">
@@ -167,6 +244,7 @@ export function AddMarkingForm({
           <FileText className="absolute left-2 top-3 h-4 w-4 text-gray-400" />
         </div>
       </div>
+
       <div className="flex justify-end gap-3 pt-4">
         <Button
           type="button"
@@ -181,9 +259,11 @@ export function AddMarkingForm({
           className="bg-green-600 hover:bg-green-700"
           disabled={isSubmitting}
         >
-          {isSubmitting ? "Guardando..." : "Guardar"}
+          {isSubmitting ? "Guardando..." : isEditing ? "Actualizar" : "Guardar"}
         </Button>
       </div>
     </form>
   );
 }
+
+export default AddMarkingForm;

@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import {
   X,
   Clock,
@@ -20,6 +19,22 @@ export function MarkingDetailsModal({
   marking,
   onClose,
 }: MarkingDetailsModalProps) {
+  // Función para formatear la hora desde un string a formato HH:MM:SS
+  const formatTime = (timeStr: string) => {
+    try {
+      const timeNum = parseFloat(timeStr);
+      const hours = Math.floor(timeNum);
+      const minutes = Math.floor((timeNum % 1) * 60);
+      const seconds = Math.floor((((timeNum % 1) * 60) % 1) * 60);
+      return `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    } catch (e) {
+      console.error("Error al formatear la hora:", e);
+      return timeStr || "N/A";
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
@@ -48,17 +63,7 @@ export function MarkingDetailsModal({
                 <Clock className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-gray-500">Hora</p>
-                  <p className="text-gray-900">
-                    {marking.time != null
-                      ? format(
-                          new Date(0).setHours(
-                            Math.floor(Number(marking.time)),
-                            (Number(marking.time) % 1) * 60 * 60
-                          ),
-                          "HH:mm:ss"
-                        )
-                      : "N/A"}
-                  </p>
+                  <p className="text-gray-900">{formatTime(marking.time)}</p>
                 </div>
               </div>
 
@@ -126,6 +131,32 @@ export function MarkingDetailsModal({
                   </p>
                   <p className="text-gray-900">
                     {marking.createdBy || "No especificado"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-gray-500">Estado</p>
+                  <p
+                    className={`font-medium ${
+                      marking.status === "APPROVED"
+                        ? "text-green-600"
+                        : marking.status === "PENDING"
+                        ? "text-yellow-600"
+                        : marking.status === "REJECTED"
+                        ? "text-red-600"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    {marking.status === "APPROVED"
+                      ? "Aprobado"
+                      : marking.status === "PENDING"
+                      ? "Pendiente"
+                      : marking.status === "REJECTED"
+                      ? "Rechazado"
+                      : "No definido"}
                   </p>
                 </div>
               </div>
