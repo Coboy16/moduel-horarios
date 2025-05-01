@@ -289,9 +289,9 @@ export default function SchedulerCalendar({
             {currentView === "timeline" && (
               <TimelineView
                 currentDate={dateRange.start}
-                events={events}
-                markings={markings}
-                employees={selectedEmployees}
+                // events={events}
+                // markings={markings}
+                selectedEmployees={selectedEmployees}
                 containerWidth={calendarWidth}
                 containerHeight={calendarHeight}
                 timelineContentRef={timelineContentRef}
