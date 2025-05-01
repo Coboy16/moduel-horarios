@@ -1,4 +1,7 @@
 export interface Marking {
+  details: string;
+  createdBy: string;
+  markingType: string;
   site?: string;
   dateStr: string;
   type: "ENTRADA" | "SALIDA" | "INICIO_DESCANSO" | "FIN_DESCANSO";

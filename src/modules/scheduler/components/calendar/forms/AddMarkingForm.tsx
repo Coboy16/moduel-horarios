@@ -1,17 +1,17 @@
 // src/components/forms/AddMarkingForm.tsx
 "use client";
 import React, { useState } from "react";
-import { MapPin as FileText, Tag, Navigation } from "lucide-react"; // Renombrado para evitar conflicto
-import { Label } from "../../ui/label"; // Asumiendo que tienes un componente Label
-import { Textarea } from "../../ui/textarea"; // Asumiendo Textarea
+import { MapPin as FileText, Tag, Navigation } from "lucide-react";
+import { Label } from "../../ui/label";
+import { Textarea } from "../../ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../../ui/select"; // Asumiendo Select
-import { Button } from "../../ui/button"; // Asumiendo Button
+} from "../../ui/select";
+import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 
 // --- Mock Data Interna ---
@@ -34,9 +34,6 @@ const mockLocations = [
 interface AddMarkingFormProps {
   initialDate: string;
   initialTime: string;
-  // Ya no se necesitan como props si usamos mock data interna
-  // locations?: string[];
-  // markingTypes?: string[];
   onClose: () => void;
   onSubmitSuccess: (message: string) => void;
 }
