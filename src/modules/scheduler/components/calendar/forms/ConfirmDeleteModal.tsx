@@ -1,32 +1,27 @@
-import { Modal } from "./Modal"; // Reutiliza tu Modal genérico
 import { AlertTriangle, X } from "lucide-react";
-import { Button } from "../../ui/button";
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean;
-  onClose: () => void; // Para cancelar o cerrar con 'X'
-  onConfirm: () => void; // Para confirmar la eliminación
-  title: string; // Título dinámico (ej: "Eliminar Horario")
-  itemName: string; // Descripción del item (ej: "el horario 'Turno Mañana' del 15/07")
+  onClose: () => void;
+  onConfirm: () => void;
+  title?: string;
+  itemName?: string;
 }
 
 export function ConfirmDeleteModal({
   isOpen,
   onClose,
   onConfirm,
-  title = "Confirmar Eliminación", // Título por defecto
-  itemName = "este elemento", // Item por defecto
+  title = "Confirmar Eliminación",
+  itemName = "este elemento",
 }: ConfirmDeleteModalProps) {
+  if (!isOpen) return null;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="" size="md">
-      {/* Quitamos el título del Modal genérico para poner el nuestro */}
-      <div className="p-0">
-        {" "}
-        {/* Reset padding si Modal añade padding */}
+    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
-            {" "}
-            {/* Alineación cambiada */}
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -35,33 +30,33 @@ export function ConfirmDeleteModal({
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-500 ml-4 -mt-1" // Ajuste de margen
+              className="text-gray-400 hover:text-gray-500 ml-4 -mt-1"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <p className="text-sm text-gray-600 mb-6 ml-13">
-            {" "}
-            {/* Añadido margen izquierdo para alinear con título */}
+          <p className="text-sm text-gray-600 mb-6">
             ¿Está seguro que desea eliminar {itemName}? Esta acción no se puede
             deshacer.
           </p>
 
           <div className="flex justify-end space-x-3">
-            <Button variant="outline" onClick={onClose}>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
               Cancelar
-            </Button>
-            <Button
-              variant="destructive" // Usar variante destructiva si tu UI la tiene
-              className="bg-red-600 hover:bg-red-700 text-white" // Clases por defecto si no hay variante
+            </button>
+            <button
               onClick={onConfirm}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
               Eliminar
-            </Button>
+            </button>
           </div>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 }

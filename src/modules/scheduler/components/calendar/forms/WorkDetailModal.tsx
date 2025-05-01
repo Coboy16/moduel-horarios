@@ -71,7 +71,7 @@ export function WorkDetailModal({
   const badgeClasses = `inline-block px-2 py-0.5 rounded text-xs font-medium border ${typeColors[currentTypeKey]}`;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={"Detalles"} size="lg">
       <div className="p-6 space-y-4">
         {/* Tipo de Evento */}
         <div className="flex justify-between items-center">
