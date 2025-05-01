@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/views/DayTimeline.tsx
 import React from "react";
-import { cn } from "../../lib/utils"; // Ajusta la ruta a tu archivo utils
-import { MapPin } from "lucide-react"; // Icono por defecto para marcajes
+import { cn } from "../../lib/utils";
+import { MapPin } from "lucide-react";
 
 // --- Tipos de Datos Simplificados ---
 interface Schedule {
@@ -27,7 +27,7 @@ interface Marking {
 // --- Props del Componente ---
 interface DayTimelineProps {
   schedule?: Schedule;
-  worked?: WorkedTime; // Este ya no se pasará si el día es futuro desde MonthView
+  worked?: WorkedTime;
   markings?: Marking[];
   width: number;
   height: number;
@@ -51,15 +51,11 @@ export function DayTimeline({
   width,
   height,
   onContextMenu,
-  isFallbackData = false,
   isFuture, // <--- Recibe la nueva prop
 }: DayTimelineProps) {
   const barLayer: React.ReactNode[] = [];
   const markingLayer: React.ReactNode[] = [];
-  // La opacidad ya no se aplica aquí, se maneja en MonthView si se desea
-  // const fallbackClass = isFallbackData ? "opacity-60" : "";
-  const fallbackClass = ""; // Sin opacidad por defecto
-
+  const fallbackClass = "";
   // --- Constantes de Estilo ---
   const SCHEDULE_BAR_TOP_PERCENT = 60;
   const WORKED_BAR_TOP_PERCENT = 25;
@@ -284,29 +280,31 @@ export function DayTimeline({
   }
 
   // 4. Render MARKINGS
-  markings.forEach((mark) => {
-    const pinLeftPx = mark.time * HOUR_WIDTH_FACTOR * width;
-    const IconComponent = mark.icon || MapPin;
-    markingLayer.push(
-      <div
-        key={`mark-${mark.id}`}
-        className={cn(
-          "absolute z-30 flex items-center justify-center",
-          fallbackClass,
-          "pointer-events-auto"
-        )}
-        style={{
-          top: `${markingTop}px`,
-          left: `${pinLeftPx}px`,
-          transform: "translate(-50%, -50%)",
-        }}
-        title={`${mark.type || "Marcaje"} @ ${formatTime(mark.time)}`}
-      >
-        {" "}
-        <IconComponent className={cn(MARKING_ICON_SIZE, mark.color)} />{" "}
-      </div>
-    );
-  });
+  if (!isFuture) {
+    markings.forEach((mark) => {
+      const pinLeftPx = mark.time * HOUR_WIDTH_FACTOR * width;
+      const IconComponent = mark.icon || MapPin;
+      markingLayer.push(
+        <div
+          key={`mark-${mark.id}`}
+          className={cn(
+            "absolute z-30 flex items-center justify-center",
+            fallbackClass,
+            "pointer-events-auto"
+          )}
+          style={{
+            top: `${markingTop}px`,
+            left: `${pinLeftPx}px`,
+            transform: "translate(-50%, -50%)",
+          }}
+          title={`${mark.type || "Marcaje"} @ ${formatTime(mark.time)}`}
+        >
+          {" "}
+          <IconComponent className={cn(MARKING_ICON_SIZE, mark.color)} />{" "}
+        </div>
+      );
+    });
+  }
 
   return (
     <div className="relative w-full h-full pointer-events-none">

@@ -22,8 +22,6 @@ export function WorkedBarContextMenuContent({
         <Copy className="mr-2 h-4 w-4" />
         <span>Copiar</span>
       </CustomContextMenuItem>
-      {/* Separador opcional */}
-      {/* <CustomContextMenuItem isSeparator /> */}
       <CustomContextMenuItem
         onClick={onDelete}
         className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50"
