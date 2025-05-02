@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react"; // Añadido useMemo
 import {
   startOfMonth,
   endOfMonth,
@@ -16,6 +16,8 @@ import {
   isBefore,
   startOfDay,
   isAfter,
+  isWithinInterval,
+  isSameDay,
 } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "../../utils/formatters";
@@ -27,7 +29,6 @@ import {
   X,
 } from "lucide-react";
 
-// Tooltip & Button
 import {
   Tooltip,
   TooltipContent,
@@ -36,13 +37,11 @@ import {
 } from "../ui/tooltip";
 import { Button } from "../ui/button";
 
-// Componentes Menú y Timeline
 import { CustomContextMenu } from "./menus/CustomContextMenu";
 import { WorkedBarContextMenuContent } from "./menus/WorkedBarContextMenu";
 import { GridCellContextMenuContent } from "./menus/GridCellContextMenu";
 import { DayTimeline } from "./DayTimeline";
 
-// --- Componentes de Formulario y Modal ---
 import { Modal } from "./forms/Modal";
 import { AddMarkingForm } from "./forms/AddMarkingForm";
 import { AddLeaveForm } from "./forms/AddLeaveForm";
@@ -50,7 +49,6 @@ import { AddShiftForm } from "./forms/AddShiftForm";
 import { WorkDetailModal } from "./forms/WorkDetailModal";
 import { ConfirmDeleteModal } from "./forms/ConfirmDeleteModal";
 
-// Mock Data
 import {
   Employee,
   mockEmployees,
@@ -59,17 +57,13 @@ import {
   mockWorkedTimes,
 } from "../../tem/week_view";
 
-// Hook Filtros
-const useFilters = () => ({
-  dateRange: { start: new Date(), end: endOfMonth(new Date()) },
-});
+import { useFilters } from "../../hooks/useFilters";
 
-// Props
 interface MonthViewProps {
   employees?: Employee[];
+  // startDate y endDate ya no son necesarios si siempre usamos useFilters
 }
 
-// Estado Menú Contextual
 interface MenuState {
   isOpen: boolean;
   position: { x: number; y: number };
@@ -83,7 +77,6 @@ const initialMenuState: MenuState = {
   data: null,
 };
 
-// Interface para datos del formulario modal (ya existente)
 interface ModalFormData {
   employeeId: string;
   dayKey: string;
@@ -91,7 +84,6 @@ interface ModalFormData {
   initialTime: string;
 }
 
-// --- (NUEVO) Interfaces para estados de Modales/Toasts de Barra ---
 interface ToastState {
   id: number;
   isVisible: boolean;
@@ -118,9 +110,7 @@ interface DeleteConfirmData {
   type: string;
   itemName: string;
 }
-// --- Fin Nuevas Interfaces ---
 
-// Mapeo día
 const dayKeyMap: { [key: number]: string } = {
   1: "lun",
   2: "mar",
@@ -131,12 +121,31 @@ const dayKeyMap: { [key: number]: string } = {
   0: "dom",
 };
 
-// Componente Principal
+const isDateInSelectedRange = (
+  date: Date,
+  range: { start: Date; end?: Date } | null | undefined
+): boolean => {
+  if (!range?.start) {
+    return false;
+  }
+  const targetDay = startOfDay(date);
+  const rangeStart = startOfDay(range.start);
+  const rangeEnd = range.end ? startOfDay(range.end) : rangeStart;
+
+  const start = isBefore(rangeStart, rangeEnd) ? rangeStart : rangeEnd;
+  const end = isAfter(rangeEnd, rangeStart) ? rangeEnd : rangeStart;
+
+  if (isSameDay(targetDay, start)) {
+    return true;
+  }
+
+  return range.end ? isWithinInterval(targetDay, { start, end }) : false;
+};
+
 export default function MonthView({ employees }: MonthViewProps) {
-  const { dateRange } = useFilters();
+  const { dateRange: selectedRange } = useFilters();
   const [menuState, setMenuState] = useState<MenuState>(initialMenuState);
 
-  // Estados Modales Formularios
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [formModalType, setFormModalType] = useState<
     "marking" | "leave" | "shift" | null
@@ -147,7 +156,6 @@ export default function MonthView({ employees }: MonthViewProps) {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // --- (NUEVO) Estados para Toasts y Modales de Barra ---
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [detailModalData, setDetailModalData] =
     useState<DetailModalData | null>(null);
@@ -156,33 +164,38 @@ export default function MonthView({ employees }: MonthViewProps) {
     useState<DeleteConfirmData | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const toastIdRef = useRef(0);
-  // --- Fin Nuevos Estados ---
 
   const employeesToDisplay =
     employees && employees.length > 0 ? employees : mockEmployees;
 
-  // Lógica Un Mes
-  const displayMonthDate = startOfMonth(dateRange.start);
-  const monthStart = startOfMonth(displayMonthDate);
-  const monthEnd = endOfMonth(displayMonthDate);
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-  const allDaysInMonthView = eachDayOfInterval({
-    start: calendarStart,
-    end: calendarEnd,
-  });
-  const monthWeeks: Date[][] = [];
-  let week: Date[] = [];
-  allDaysInMonthView.forEach((day, i) => {
-    week.push(day);
-    if ((i + 1) % 7 === 0) {
-      monthWeeks.push(week);
-      week = [];
+  // *** NUEVO: Determinar los meses a mostrar ***
+  const monthsToDisplay = useMemo(() => {
+    const months: Date[] = [];
+    const defaultDate = startOfMonth(new Date()); // Fallback si no hay rango
+
+    if (selectedRange?.start) {
+      const startMonth = startOfMonth(selectedRange.start);
+      months.push(startMonth);
+
+      if (selectedRange.end && !isSameMonth(startMonth, selectedRange.end)) {
+        const endMonth = startOfMonth(selectedRange.end);
+        // Asegurarse de que no añadamos el mismo mes dos veces si el rango es muy corto
+        if (!isSameDay(startMonth, endMonth)) {
+          months.push(endMonth);
+        }
+      }
+    } else {
+      // Si no hay rango seleccionado, mostrar el mes actual como fallback
+      months.push(defaultDate);
     }
-  });
+    // Ordenar los meses por si acaso el rango estuviera invertido
+    months.sort((a, b) => a.getTime() - b.getTime());
+    return months;
+  }, [selectedRange]);
+  // *** FIN NUEVO ***
+
   const todayDate = startOfDay(new Date());
 
-  // --- Helpers ---
   const getDayKeyFromDate = (date: Date): string =>
     dayKeyMap[getDay(date)] || "unknown";
 
@@ -196,9 +209,7 @@ export default function MonthView({ employees }: MonthViewProps) {
       .toString()
       .padStart(2, "0")}`;
   }, []);
-  // --- Fin Helpers ---
 
-  // --- (NUEVO) Funciones Toast ---
   const showToast = useCallback(
     (
       message: string,
@@ -234,9 +245,6 @@ export default function MonthView({ employees }: MonthViewProps) {
     );
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.isVisible)), 500);
   };
-  // --- Fin Funciones Toast ---
-
-  // --- Funciones para manejar modales ---
 
   const closeAllModals = useCallback(() => {
     setIsFormModalOpen(false);
@@ -262,7 +270,7 @@ export default function MonthView({ employees }: MonthViewProps) {
   const closeContextMenu = useCallback(() => {
     setMenuState(initialMenuState);
   }, []);
-  // --- Fin Funciones para manejar modales ---
+
   const openFormModal = useCallback(
     (type: "marking" | "leave" | "shift", data: ModalFormData) => {
       closeContextMenu();
@@ -273,7 +281,7 @@ export default function MonthView({ employees }: MonthViewProps) {
     },
     [closeAllModals, closeContextMenu]
   );
-  // --- Handlers Menú y Acciones ---
+
   const handleContextMenu = useCallback(
     (
       event: React.MouseEvent<HTMLDivElement>,
@@ -313,7 +321,6 @@ export default function MonthView({ employees }: MonthViewProps) {
     [closeContextMenu, closeAllModals]
   );
 
-  // --- (NUEVO) Handlers específicos para acciones de barra ---
   const handleViewDetailsWorked = useCallback(() => {
     if (
       menuState.type !== "worked" ||
@@ -481,9 +488,7 @@ export default function MonthView({ employees }: MonthViewProps) {
   const handleCancelDelete = useCallback(() => {
     closeAllModals();
   }, [closeAllModals]);
-  // --- Fin Handlers Acciones Barra ---
 
-  // Handlers para acciones del menú de celda (ya existentes, sin cambios)
   const handleAddMarking = useCallback(() => {
     if (menuState.type === "grid" && menuState.data) {
       const { employeeId, date } = menuState.data;
@@ -497,7 +502,7 @@ export default function MonthView({ employees }: MonthViewProps) {
         initialTime,
       });
     }
-  }, [menuState, openFormModal]);
+  }, [menuState, openFormModal, getDayKeyFromDate]);
 
   const handleAddLeave = useCallback(() => {
     if (menuState.type === "grid" && menuState.data) {
@@ -507,7 +512,7 @@ export default function MonthView({ employees }: MonthViewProps) {
       const initialTime = "00:00";
       openFormModal("leave", { employeeId, dayKey, initialDate, initialTime });
     }
-  }, [menuState, openFormModal]);
+  }, [menuState, openFormModal, getDayKeyFromDate]);
 
   const handleAddShift = useCallback(() => {
     if (menuState.type === "grid" && menuState.data) {
@@ -517,10 +522,8 @@ export default function MonthView({ employees }: MonthViewProps) {
       const initialTime = "00:00";
       openFormModal("shift", { employeeId, dayKey, initialDate, initialTime });
     }
-  }, [menuState, openFormModal]);
-  // --- Fin Handlers ---
+  }, [menuState, openFormModal, getDayKeyFromDate]);
 
-  // Render Checks
   if (employeesToDisplay.length === 0) {
     return (
       <div className="flex justify-center items-center h-60 text-gray-500">
@@ -529,7 +532,6 @@ export default function MonthView({ employees }: MonthViewProps) {
     );
   }
 
-  // Estilos
   const headerBgColor = "bg-blue-100";
   const headerTextColor = "text-blue-800";
   const borderColor = "border-blue-200";
@@ -538,13 +540,13 @@ export default function MonthView({ employees }: MonthViewProps) {
   const otherMonthTextColor = "text-gray-400";
   const mainBgColor = "bg-white";
   const employeeHeaderBg = "bg-gray-100";
+  const selectedDayBgColor = "bg-blue-200";
+  const selectedDayTextColor = "text-black";
 
-  // Dimensiones
   const estimatedCellWidth =
     typeof window !== "undefined" ? Math.max(100, window.innerWidth / 8) : 150;
   const estimatedTimelineHeight = 28;
 
-  // --- (NUEVO) Estilos y Iconos para Toasts ---
   const toastBaseClasses =
     "fixed bottom-5 right-5 z-[100] max-w-sm w-full p-4 rounded-lg shadow-lg flex items-start space-x-3 transition-all duration-300 ease-in-out";
   const toastTypeClasses = {
@@ -559,7 +561,194 @@ export default function MonthView({ employees }: MonthViewProps) {
     warning: <AlertTriangle className="h-5 w-5 text-yellow-600" />,
     error: <XCircle className="h-5 w-5 text-red-600" />,
   };
-  // --- Fin Estilos Toast ---
+
+  // *** Función para renderizar la cuadrícula de un mes específico ***
+  const renderMonthGrid = (monthDate: Date, employee: Employee) => {
+    const monthStart = startOfMonth(monthDate);
+    const monthEnd = endOfMonth(monthDate);
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    const allDaysInMonthView = eachDayOfInterval({
+      start: calendarStart,
+      end: calendarEnd,
+    });
+    const monthWeeks: Date[][] = [];
+    let week: Date[] = [];
+    allDaysInMonthView.forEach((day, i) => {
+      week.push(day);
+      if ((i + 1) % 7 === 0) {
+        monthWeeks.push(week);
+        week = [];
+      }
+    });
+    if (week.length > 0) {
+      monthWeeks.push(week);
+    }
+
+    return (
+      <div key={format(monthDate, "yyyy-MM")} className="mb-0">
+        {/* Encabezado del Mes (ya no es sticky) */}
+        <div
+          className={cn(
+            "px-4 py-2 font-medium text-center border-b",
+            headerBgColor,
+            headerTextColor,
+            borderColor
+            // "sticky z-10 top-[68px]" // Removido sticky
+          )}
+        >
+          {format(monthDate, "MMMM yyyy", { locale: es })}
+        </div>
+        {/* Encabezado Días Semana */}
+        <div className="grid grid-cols-7 border-b bg-gray-50">
+          {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((dayName) => (
+            <div
+              key={dayName}
+              className={cn(
+                "h-8 flex items-center justify-center text-xs font-medium text-gray-500",
+                borderColor,
+                "border-r last:border-r-0"
+              )}
+            >
+              {dayName}
+            </div>
+          ))}
+        </div>
+        {/* Cuadrícula del Calendario */}
+        <div className="grid grid-cols-7">
+          {monthWeeks.map((weekData, weekIndex) => (
+            <React.Fragment key={weekIndex}>
+              {weekData.map((day) => {
+                const isCurrentDisplayMonth = isSameMonth(day, monthDate); // Comparar con el mes que se está renderizando
+                const isTodayDate = isToday(day);
+                const dayKey = getDayKeyFromDate(day);
+                const isPastOrToday = isBefore(day, todayDate) || isTodayDate;
+                const isFutureDay = isAfter(day, todayDate);
+                const isInSelectedRange = isDateInSelectedRange(
+                  day,
+                  selectedRange
+                );
+
+                let scheduleToRender: any;
+                let workedToRender: any;
+                let markingsToRender: any[] = [];
+                let isFallbackData = false;
+                const actualSchedule = mockSchedules.find(
+                  (s) => s.employeeId === employee.id && s.dayKey === dayKey
+                );
+                const actualWorked = mockWorkedTimes.find(
+                  (w) => w.employeeId === employee.id && w.dayKey === dayKey
+                );
+                const actualMarkings = mockMarkings.filter(
+                  (m) => m.employeeId === employee.id && m.dayKey === dayKey
+                );
+                const requiresFallback =
+                  !(
+                    actualSchedule ||
+                    actualWorked ||
+                    actualMarkings.length > 0
+                  ) &&
+                  employees &&
+                  employees.length > 0 &&
+                  mockEmployees.length > 0;
+
+                if (requiresFallback) {
+                  isFallbackData = true;
+                  const fallbackEmpId = mockEmployees[0].id;
+                  scheduleToRender = mockSchedules.find(
+                    (s) => s.employeeId === fallbackEmpId && s.dayKey === dayKey
+                  );
+                  workedToRender = isPastOrToday
+                    ? mockWorkedTimes.find(
+                        (w) =>
+                          w.employeeId === fallbackEmpId && w.dayKey === dayKey
+                      )
+                    : undefined;
+                  markingsToRender = mockMarkings.filter(
+                    (m) => m.employeeId === fallbackEmpId && m.dayKey === dayKey
+                  );
+                } else {
+                  scheduleToRender = actualSchedule;
+                  workedToRender = isPastOrToday ? actualWorked : undefined;
+                  markingsToRender = actualMarkings;
+                }
+
+                return (
+                  <div
+                    key={`${employee.id}-${format(day, "yyyy-MM-dd")}`}
+                    onContextMenu={(e) =>
+                      handleContextMenu(e, "grid", {
+                        employeeId: employee.id,
+                        date: day,
+                      })
+                    }
+                    className={cn(
+                      "relative min-h-[100px] border-r border-b p-1 flex flex-col cursor-context-menu",
+                      borderColor,
+                      isInSelectedRange
+                        ? selectedDayBgColor
+                        : isTodayDate
+                        ? todayBgColor
+                        : isCurrentDisplayMonth // Usar isCurrentDisplayMonth aquí
+                        ? mainBgColor
+                        : otherMonthBgColor,
+                      isInSelectedRange
+                        ? selectedDayTextColor
+                        : !isCurrentDisplayMonth // Usar isCurrentDisplayMonth aquí
+                        ? otherMonthTextColor
+                        : "text-gray-800"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "text-right text-xs font-medium p-0.5 self-end select-none",
+                        isInSelectedRange
+                          ? selectedDayTextColor
+                          : isTodayDate
+                          ? "text-blue-700 font-semibold"
+                          : !isCurrentDisplayMonth // Usar isCurrentDisplayMonth aquí
+                          ? otherMonthTextColor // Atenuar número si no es del mes actual Y no está seleccionado
+                          : ""
+                      )}
+                    >
+                      {format(day, "d")}
+                    </div>
+                    <div className="flex-grow relative mt-1 min-h-[30px]">
+                      {(scheduleToRender ||
+                        workedToRender ||
+                        markingsToRender.length > 0) && (
+                        <DayTimeline
+                          schedule={scheduleToRender}
+                          worked={workedToRender}
+                          markings={markingsToRender}
+                          width={estimatedCellWidth - 10}
+                          height={estimatedTimelineHeight}
+                          onContextMenu={(
+                            e,
+                            typeFromTimeline,
+                            dataFromTimeline
+                          ) => {
+                            handleContextMenu(e, "worked", {
+                              ...dataFromTimeline,
+                              employeeId: employee.id,
+                              date: day,
+                            });
+                          }}
+                          isFallbackData={isFallbackData}
+                          isFuture={isFutureDay}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  // *** Fin función renderMonthGrid ***
 
   return (
     <TooltipProvider>
@@ -574,7 +763,7 @@ export default function MonthView({ employees }: MonthViewProps) {
           }
         }}
       >
-        {/* Header General Rango */}
+        {/* Encabezado General (Opcional, muestra el primer mes del rango o actual) */}
         <div
           className={cn(
             "w-full text-center text-sm font-medium py-2 border-b sticky top-0 z-20",
@@ -583,14 +772,15 @@ export default function MonthView({ employees }: MonthViewProps) {
             borderColor
           )}
         >
-          {format(dateRange.start, "d 'de' MMMM", { locale: es })} -{" "}
-          {format(dateRange.end, "d 'de' MMMM 'de' yyyy", { locale: es })}
+          {format(monthsToDisplay[0], "MMMM yyyy", { locale: es })}
+          {monthsToDisplay.length > 1 &&
+            ` - ${format(monthsToDisplay[1], "MMMM yyyy", { locale: es })}`}
         </div>
 
         {/* Mapeo de Empleados */}
         {employeesToDisplay.map((employee) => (
           <div key={employee.id} className={`mb-0 border-b-4 ${borderColor}`}>
-            {/* Header Empleado con Tooltip */}
+            {/* Encabezado Empleado (Sigue siendo sticky) */}
             <Tooltip delayDuration={150}>
               <TooltipTrigger asChild>
                 <div
@@ -598,7 +788,7 @@ export default function MonthView({ employees }: MonthViewProps) {
                     "px-4 py-1.5 font-semibold text-sm sticky z-10 border-b cursor-default",
                     employeeHeaderBg,
                     borderColor,
-                    "top-[40px]"
+                    "top-[40px]" // Ajustado porque el encabezado general es sticky
                   )}
                 >
                   {employee.name} - {employee.department}
@@ -609,6 +799,7 @@ export default function MonthView({ employees }: MonthViewProps) {
                 align="start"
                 className="bg-slate-800 text-white p-3 rounded-md shadow-lg text-xs border border-slate-700 w-60"
               >
+                {/* ... contenido del tooltip sin cambios ... */}
                 <div className="font-bold text-sm mb-2">{employee.name}</div>
                 <div className="space-y-1">
                   <div>
@@ -651,165 +842,16 @@ export default function MonthView({ employees }: MonthViewProps) {
                 </div>
               </TooltipContent>
             </Tooltip>
-            {/* Renderizar SOLO el mes */}
-            <div key={format(displayMonthDate, "yyyy-MM")} className="mb-0">
-              {/* Header Mes */}
-              <div
-                className={cn(
-                  "px-4 py-2 font-medium sticky z-10 text-center border-b",
-                  headerBgColor,
-                  headerTextColor,
-                  borderColor,
-                  "top-[68px]"
-                )}
-              >
-                {format(displayMonthDate, "MMMM yyyy", { locale: es })}
-              </div>
-              {/* Header Días Semana */}
-              <div className="grid grid-cols-7 border-b bg-gray-50">
-                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(
-                  (dayName) => (
-                    <div
-                      key={dayName}
-                      className={cn(
-                        "h-8 flex items-center justify-center text-xs font-medium text-gray-500",
-                        borderColor,
-                        "border-r last:border-r-0"
-                      )}
-                    >
-                      {dayName}
-                    </div>
-                  )
-                )}
-              </div>
-              {/* Grid Calendario */}
-              <div className="grid grid-cols-7">
-                {monthWeeks.map((weekData, weekIndex) => (
-                  <React.Fragment key={weekIndex}>
-                    {weekData.map((day) => {
-                      const isCurrentMonth = isSameMonth(day, displayMonthDate);
-                      const isTodayDate = isToday(day);
-                      const dayKey = getDayKeyFromDate(day);
-                      const isPastOrToday =
-                        isBefore(day, todayDate) || isTodayDate;
-                      const isFutureDay = isAfter(day, todayDate);
 
-                      let scheduleToRender: any;
-                      let workedToRender: any;
-                      let markingsToRender: any[] = [];
-                      let isFallbackData = false;
-                      const actualSchedule = mockSchedules.find(
-                        (s) =>
-                          s.employeeId === employee.id && s.dayKey === dayKey
-                      );
-                      const actualWorked = mockWorkedTimes.find(
-                        (w) =>
-                          w.employeeId === employee.id && w.dayKey === dayKey
-                      );
-                      const actualMarkings = mockMarkings.filter(
-                        (m) =>
-                          m.employeeId === employee.id && m.dayKey === dayKey
-                      );
-                      const requiresFallback =
-                        !(
-                          actualSchedule ||
-                          actualWorked ||
-                          actualMarkings.length > 0
-                        ) &&
-                        employees &&
-                        employees.length > 0 &&
-                        mockEmployees.length > 0;
-
-                      if (requiresFallback) {
-                        isFallbackData = true;
-                        const fallbackEmpId = mockEmployees[0].id;
-                        scheduleToRender = mockSchedules.find(
-                          (s) =>
-                            s.employeeId === fallbackEmpId &&
-                            s.dayKey === dayKey
-                        );
-                        workedToRender = isPastOrToday
-                          ? mockWorkedTimes.find(
-                              (w) =>
-                                w.employeeId === fallbackEmpId &&
-                                w.dayKey === dayKey
-                            )
-                          : undefined;
-                        markingsToRender = mockMarkings.filter(
-                          (m) =>
-                            m.employeeId === fallbackEmpId &&
-                            m.dayKey === dayKey
-                        );
-                      } else {
-                        scheduleToRender = actualSchedule;
-                        workedToRender = isPastOrToday
-                          ? actualWorked
-                          : undefined;
-                        markingsToRender = actualMarkings;
-                      }
-
-                      return (
-                        <div
-                          key={`${employee.id}-${format(day, "yyyy-MM-dd")}`}
-                          onContextMenu={(e) =>
-                            handleContextMenu(e, "grid", {
-                              employeeId: employee.id,
-                              date: day,
-                            })
-                          }
-                          className={cn(
-                            "relative min-h-[100px] border-r border-b p-1 flex flex-col cursor-context-menu",
-                            borderColor,
-                            isCurrentMonth ? mainBgColor : otherMonthBgColor,
-                            isTodayDate ? todayBgColor : "",
-                            !isCurrentMonth
-                              ? otherMonthTextColor
-                              : "text-gray-800"
-                          )}
-                        >
-                          <div className="text-right text-xs font-medium p-0.5 self-end select-none">
-                            {format(day, "d")}
-                          </div>
-                          <div className="flex-grow relative mt-1 min-h-[30px]">
-                            {(scheduleToRender ||
-                              workedToRender ||
-                              markingsToRender.length > 0) && (
-                              <DayTimeline
-                                schedule={scheduleToRender}
-                                worked={workedToRender}
-                                markings={markingsToRender}
-                                width={estimatedCellWidth - 10}
-                                height={estimatedTimelineHeight}
-                                onContextMenu={(
-                                  e,
-                                  typeFromTimeline,
-                                  dataFromTimeline
-                                ) => {
-                                  handleContextMenu(e, "worked", {
-                                    ...dataFromTimeline,
-                                    employeeId: employee.id,
-                                    date: day,
-                                  });
-                                }}
-                                isFallbackData={isFallbackData}
-                                isFuture={isFutureDay}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </div>{" "}
-              {/* Fin Grid Calendario */}
-            </div>{" "}
-            {/* Fin Render Mes */}
+            {/* *** NUEVO: Mapeo de los meses a mostrar *** */}
+            {monthsToDisplay.map((monthDate) =>
+              renderMonthGrid(monthDate, employee)
+            )}
+            {/* *** FIN NUEVO *** */}
           </div> /* Fin Mapeo Empleado */
         ))}
 
-        {/* --- Modales --- */}
-        {/* Modales de Formularios (AHORA CON CONTENIDO INTERNO) */}
+        {/* --- Modales y Menú Contextual (sin cambios) --- */}
         <Modal
           isOpen={isFormModalOpen}
           onClose={closeAllModals}
@@ -872,7 +914,6 @@ export default function MonthView({ employees }: MonthViewProps) {
           </div>
         </Modal>
 
-        {/* --- (NUEVO) Renderizado de Modales para Barra --- */}
         <WorkDetailModal
           isOpen={isDetailModalOpen}
           onClose={closeAllModals}
@@ -889,9 +930,7 @@ export default function MonthView({ employees }: MonthViewProps) {
           }
           itemName={deleteConfirmData?.itemName || "este elemento"}
         />
-        {/* --- Fin Nuevos Modales --- */}
 
-        {/* Menú Contextual */}
         <CustomContextMenu
           isOpen={menuState.isOpen}
           position={menuState.position}
@@ -917,7 +956,7 @@ export default function MonthView({ employees }: MonthViewProps) {
           )}
         </CustomContextMenu>
 
-        {/* --- (NUEVO) Renderizado de Toasts --- */}
+        {/* --- Toasts (sin cambios) --- */}
         <div className="fixed bottom-0 right-0 p-4 space-y-2 z-[100]">
           {toasts.map((toast) => (
             <div
@@ -945,9 +984,7 @@ export default function MonthView({ employees }: MonthViewProps) {
             </div>
           ))}
         </div>
-        {/* --- Fin Toasts --- */}
-      </div>{" "}
-      {/* Fin Contenedor Principal */}
+      </div>
     </TooltipProvider>
   );
 }

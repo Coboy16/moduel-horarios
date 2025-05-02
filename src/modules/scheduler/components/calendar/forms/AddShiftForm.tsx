@@ -135,7 +135,7 @@ export function AddShiftForm({
             <SelectTrigger id="workShift">
               <SelectValue placeholder="Buscar..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white">
               {mockWorkShifts.map((shift) => (
                 <SelectItem key={shift} value={shift}>
                   <Briefcase className="inline-block mr-2 h-4 w-4 text-gray-500" />
@@ -154,7 +154,7 @@ export function AddShiftForm({
             <SelectTrigger id="site">
               <SelectValue placeholder="Sede..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white">
               {mockSites.map((s) => (
                 <SelectItem key={s} value={s}>
                   <Building className="inline-block mr-2 h-4 w-4 text-gray-500" />
@@ -173,7 +173,7 @@ export function AddShiftForm({
             <SelectTrigger id="job">
               <SelectValue placeholder="Buscar..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white">
               {mockJobs.map((j) => (
                 <SelectItem key={j} value={j}>
                   <Cog className="inline-block mr-2 h-4 w-4 text-gray-500" />

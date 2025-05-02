@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/components/views/WeekView.tsx
 "use client";
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useMemo } from "react"; // Añadido useMemo
 import { cn } from "../../lib/utils";
 import {
   MapPin,
@@ -12,7 +11,15 @@ import {
   Info as InfoIcon,
   X,
 } from "lucide-react";
-import { format } from "date-fns"; // format ya estaba
+import {
+  format,
+  eachDayOfInterval,
+  startOfWeek,
+  endOfWeek,
+  startOfDay,
+  isAfter,
+} from "date-fns"; // Añadidas funciones de date-fns
+import { es } from "date-fns/locale"; // Añadido locale español
 import {
   Tooltip,
   TooltipContent,
@@ -27,6 +34,8 @@ import {
   mockWorkedTimes,
 } from "../../tem/week_view";
 
+import { useFilters } from "../../hooks/useFilters"; // Importar hook de filtros
+
 import { CustomContextMenu } from "./menus/CustomContextMenu";
 import { WorkedBarContextMenuContent } from "./menus/WorkedBarContextMenu";
 import { GridCellContextMenuContent } from "./menus/GridCellContextMenu";
@@ -40,11 +49,10 @@ import { Button } from "../ui/button";
 import { Marking } from "../../interfaces/Marking";
 import { EmployeeMarkingsTable } from "./forms/EmployeeMarkingsTable";
 
-// --- (NUEVO) Importar los modales necesarios ---
-import { WorkDetailModal } from "./forms/WorkDetailModal"; // Asegúrate que la ruta sea correcta
-import { ConfirmDeleteModal } from "./forms/ConfirmDeleteModal"; // Asegúrate que la ruta sea correcta
+import { WorkDetailModal } from "./forms/WorkDetailModal";
+import { ConfirmDeleteModal } from "./forms/ConfirmDeleteModal";
 
-// Constantes (sin cambios)
+// Constantes
 const EMPLOYEE_COL_WIDTH = 160;
 const DAY_COL_WIDTH = 80;
 const HEADER_HEIGHT = 40;
@@ -52,18 +60,9 @@ const HOUR_WIDTH = 80;
 const ROW_HEIGHT = 65;
 const TOTAL_LEFT_WIDTH = EMPLOYEE_COL_WIDTH + DAY_COL_WIDTH;
 
-// Datos días (sin cambios)
-const days = [
-  { key: "lun", date: "28/04" },
-  { key: "mar", date: "29/04" },
-  { key: "mié", date: "30/04" },
-  { key: "jue", date: "01/05" },
-  { key: "vie", date: "02/05" },
-  { key: "sáb", date: "03/05" },
-];
-const currentYear = new Date().getFullYear();
+// Mapeo día (para mock data filtering)
 
-// Interfaces Props y Estado (sin cambios estructurales)
+// Interfaces (sin cambios estructurales)
 interface WeekViewProps {
   employees?: Employee[];
 }
@@ -77,9 +76,10 @@ interface MenuState {
 
 interface ModalFormData {
   employeeId: string;
-  dayKey: string;
-  initialDate: string;
-  initialTime: string;
+  dayKey: string; // Mantenemos dayKey para compatibilidad con mocks/formularios
+  fullDate: Date; // Añadimos la fecha completa
+  initialDate: string; // Formato YYYY-MM-DD
+  initialTime: string; // Formato HH:mm
 }
 
 interface ToastState {
@@ -89,7 +89,6 @@ interface ToastState {
   type: "success" | "info" | "warning" | "error";
 }
 
-// --- (NUEVO) Interfaces para estados de Modales/Toasts de Barra ---
 interface DetailModalData {
   id: string;
   type: string;
@@ -105,17 +104,60 @@ interface DetailModalData {
 }
 
 interface DeleteConfirmData {
-  id: string; // ID del item a borrar (scheduleId o workedId)
-  type: string; // 'schedule', 'worked', 'regular', 'overtime'
-  itemName: string; // Descripción para el mensaje del modal
+  id: string;
+  type: string;
+  itemName: string;
 }
-// --- Fin Nuevas Interfaces ---
+
+// *** NUEVO: Interface para los días dinámicos ***
+interface DynamicDay {
+  key: string; // ej: "lun"
+  date: string; // ej: "28/04"
+  fullDate: Date; // Objeto Date completo
+}
 
 export default function WeekView({ employees }: WeekViewProps) {
+  const { dateRange: selectedRange } = useFilters(); // Obtener rango del hook
+
   const employeesToDisplay =
     employees && employees.length > 0 ? employees : mockEmployees;
 
-  // Estados existentes (sin cambios)
+  // *** NUEVO: Generar días dinámicamente ***
+  const dynamicDays = useMemo((): DynamicDay[] => {
+    let startDate: Date;
+    let endDate: Date;
+
+    if (selectedRange?.start) {
+      startDate = startOfDay(selectedRange.start);
+      endDate = selectedRange.end ? startOfDay(selectedRange.end) : startDate; // Si no hay end, es un solo día
+    } else {
+      // Fallback: Mostrar la semana actual (Lunes a Domingo) si no hay rango
+      const today = new Date();
+      startDate = startOfWeek(today, { weekStartsOn: 1 }); // Lunes
+      endDate = endOfWeek(today, { weekStartsOn: 1 }); // Domingo
+    }
+
+    // Asegurar que start <= end
+    if (isAfter(startDate, endDate)) {
+      [startDate, endDate] = [endDate, startDate]; // Swap si están invertidas
+    }
+
+    const daysInInterval = eachDayOfInterval({
+      start: startDate,
+      end: endDate,
+    });
+
+    return daysInInterval.map(
+      (date): DynamicDay => ({
+        key: format(date, "eee", { locale: es }).toLowerCase(), // ej: "lun"
+        date: format(date, "dd/MM", { locale: es }), // ej: "28/04"
+        fullDate: date, // Guardar el objeto Date completo
+      })
+    );
+  }, [selectedRange]);
+  // *** FIN NUEVO ***
+
+  // Estados (sin cambios estructurales)
   const [menuState, setMenuState] = useState<MenuState>({
     isOpen: false,
     position: { x: 0, y: 0 },
@@ -140,29 +182,14 @@ export default function WeekView({ employees }: WeekViewProps) {
   const [pasteEmployeeId, setPasteEmployeeId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const toastIdRef = useRef(0);
-
-  // --- (NUEVO) Estados para Modales de Barra ---
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [detailModalData, setDetailModalData] =
     useState<DetailModalData | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleteConfirmData, setDeleteConfirmData] =
     useState<DeleteConfirmData | null>(null);
-  // --- Fin Nuevos Estados ---
 
-  // Funciones auxiliares existentes (sin cambios)
-  const getRowIndex = useCallback(
-    (employeeId: string, dayKey: string): number => {
-      const employeeIndex = employeesToDisplay.findIndex(
-        (e) => e.id === employeeId
-      );
-      const dayIndex = days.findIndex((d) => d.key === dayKey);
-      if (employeeIndex === -1 || dayIndex === -1) return -1;
-      return employeeIndex * days.length + dayIndex;
-    },
-    [employeesToDisplay]
-  );
-
+  // Funciones auxiliares (sin cambios)
   const calculateTimeFromOffset = useCallback(
     (offsetX: number, timelineWidth: number): number => {
       if (timelineWidth <= 0 || isNaN(offsetX) || offsetX < 0) return 0;
@@ -197,15 +224,16 @@ export default function WeekView({ employees }: WeekViewProps) {
       .padStart(2, "0")}`;
   }, []);
 
-  // Dimensiones calculadas (sin cambios)
+  // Dimensiones calculadas (MODIFICADO para usar dynamicDays)
   const totalNumberOfEmployees = employeesToDisplay.length;
-  const totalNumberOfRows = totalNumberOfEmployees * days.length;
+  const totalNumberOfDays = dynamicDays.length; // Usar longitud del array dinámico
+  const totalNumberOfRows = totalNumberOfEmployees * totalNumberOfDays; // Actualizado
   const totalTimelineContentHeight = totalNumberOfRows * ROW_HEIGHT;
   const totalTimelineHeight = totalTimelineContentHeight + HEADER_HEIGHT;
   const totalTimelineContentWidth = 24 * HOUR_WIDTH;
   const hoursToDisplay = Array.from({ length: 24 }, (_, i) => i);
 
-  // Funciones Toast (ya existentes y correctas)
+  // Funciones Toast (sin cambios)
   const showToast = useCallback(
     (
       message: string,
@@ -242,9 +270,8 @@ export default function WeekView({ employees }: WeekViewProps) {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.isVisible)), 500);
   };
 
-  // (MODIFICADO) closeAllModals ahora cierra también los nuevos modales
+  // closeAllModals (sin cambios)
   const closeAllModals = useCallback(() => {
-    // Modales existentes
     setIsFormModalOpen(false);
     setFormModalType(null);
     setFormModalData(null);
@@ -254,12 +281,11 @@ export default function WeekView({ employees }: WeekViewProps) {
     setMarkingsModalData({ employee: null, markings: [] });
     setIsPasteConfirmOpen(false);
     setPasteEmployeeId(null);
-    // (NUEVO) Cerrar modales de barra
     setIsDetailModalOpen(false);
     setDetailModalData(null);
     setIsDeleteConfirmOpen(false);
     setDeleteConfirmData(null);
-  }, []); // Dependencias vacías porque solo usa setters
+  }, []);
 
   const closeContextMenu = useCallback(() => {
     setMenuState((prev) => ({
@@ -270,22 +296,21 @@ export default function WeekView({ employees }: WeekViewProps) {
     }));
   }, []);
 
-  // (MODIFICADO) handleContextMenu para asegurar datos en 'worked'
+  // handleContextMenu (MODIFICADO para usar fullDate)
   const handleContextMenu = useCallback(
     (
       event: React.MouseEvent<HTMLDivElement>,
       type: "worked" | "grid" | "employee",
-      data: any
+      data: any // data contendrá { employeeId, dayKey, fullDate } para 'grid'
     ) => {
       event.preventDefault();
       event.stopPropagation();
-      closeAllModals(); // Cierra todos los modales primero
-      closeContextMenu(); // Cierra el menú anterior
+      closeAllModals();
+      closeContextMenu();
 
-      let processedData = { ...data }; // Copia inicial
+      let processedData = { ...data };
 
       if (type === "grid") {
-        // Lógica existente para grid (sin cambios aquí, ya estaba completa)
         const currentTarget = event.currentTarget as Element;
         const container = currentTarget.closest(".overflow-auto");
         const containerRect = container?.getBoundingClientRect();
@@ -300,52 +325,38 @@ export default function WeekView({ employees }: WeekViewProps) {
           totalTimelineContentWidth
         );
         const formattedTime = formatTime(clickedTimeDecimal);
-        const dayInfo = days.find((d) => d.key === data.dayKey);
-        const dateStr = dayInfo
-          ? `${dayInfo.date}/${currentYear}`
-          : `??/??/${currentYear}`;
-        let initialDateObj = new Date();
-        if (dayInfo) {
-          const [dayOfMonth, month] = dayInfo.date.split("/");
-          initialDateObj = new Date(
-            currentYear,
-            parseInt(month) - 1,
-            parseInt(dayOfMonth)
-          );
-        }
-        const formattedDateForInput = format(initialDateObj, "yyyy-MM-dd");
+        // Usar fullDate para formatear
+        const dateStr = format(data.fullDate, "dd/MM/yyyy", { locale: es });
+        const formattedDateForInput = format(data.fullDate, "yyyy-MM-dd");
 
         processedData = {
-          ...data,
+          ...data, // Mantiene employeeId, dayKey, fullDate
           clickedTime: clickedTimeDecimal,
           formattedDateTime: `${dateStr} - ${formattedTime}`,
           initialDate: formattedDateForInput,
           initialTime: formattedTime,
         };
       } else if (type === "worked") {
-        // ¡CRÍTICO! Asegura que 'data' contenga id, employeeId, dayKey
         processedData.id = data.scheduleId || data.workedId;
-
-        // Verificar si faltan datos esenciales pasados por el evento onContextMenu de la barra
         if (!processedData.id || !data.employeeId || !data.dayKey) {
+          // dayKey sigue siendo útil para filtrar mocks
           console.warn(
             "WeekView: Datos incompletos para menú 'worked'. Faltan id, employeeId o dayKey.",
             data
           );
-          // Es crucial que el onContextMenu de las barras en el JSX pase estos datos.
         }
+        // Podríamos añadir fullDate aquí si la barra lo pasara, para más precisión
+        // processedData.fullDate = data.fullDate;
       }
-      // Para 'employee', no se necesita procesamiento adicional aquí
 
       setMenuState({
         isOpen: true,
         position: { x: event.clientX, y: event.clientY },
         type: type,
-        data: processedData, // Usar los datos procesados/verificados
+        data: processedData,
       });
     },
     [
-      // Mantener dependencias originales
       closeAllModals,
       closeContextMenu,
       calculateTimeFromOffset,
@@ -354,30 +365,34 @@ export default function WeekView({ employees }: WeekViewProps) {
     ]
   );
 
-  // Funciones para abrir modales de formulario (sin cambios)
+  // openFormModal (MODIFICADO para aceptar fullDate)
   const openFormModal = (
     type: "marking" | "leave" | "shift",
-    data: ModalFormData
+    data: ModalFormData // La interfaz ya incluye fullDate
   ) => {
     closeAllModals();
     closeContextMenu();
-    setFormModalData(data);
+    setFormModalData(data); // Guardar todos los datos necesarios
     setFormModalType(type);
     setIsFormModalOpen(true);
   };
+
+  // handleFormSuccess (sin cambios)
   const handleFormSuccess = (message: string) => {
     closeAllModals();
     setSuccessMessage(message);
     setIsSuccessModalOpen(true);
   };
 
-  // Handlers para acciones de menú GRID (sin cambios)
+  // Handlers menú GRID (MODIFICADO para pasar fullDate)
   const handleAddMarking = () => {
     if (menuState.type === "grid" && menuState.data) {
-      const { employeeId, dayKey, initialDate, initialTime } = menuState.data;
+      const { employeeId, dayKey, fullDate, initialDate, initialTime } =
+        menuState.data;
       openFormModal("marking", {
         employeeId,
         dayKey,
+        fullDate,
         initialDate,
         initialTime,
       });
@@ -385,50 +400,59 @@ export default function WeekView({ employees }: WeekViewProps) {
   };
   const handleAddLeave = () => {
     if (menuState.type === "grid" && menuState.data) {
-      const { employeeId, dayKey, initialDate, initialTime } = menuState.data;
-      openFormModal("leave", { employeeId, dayKey, initialDate, initialTime });
+      const { employeeId, dayKey, fullDate, initialDate, initialTime } =
+        menuState.data;
+      openFormModal("leave", {
+        employeeId,
+        dayKey,
+        fullDate,
+        initialDate,
+        initialTime,
+      });
     }
   };
   const handleAddShift = () => {
     if (menuState.type === "grid" && menuState.data) {
-      const { employeeId, dayKey, initialDate } = menuState.data;
+      const { employeeId, dayKey, fullDate, initialDate } = menuState.data;
       openFormModal("shift", {
         employeeId,
         dayKey,
+        fullDate,
         initialDate,
-        initialTime: "00:00",
+        initialTime: "00:00", // Shift usualmente empieza al inicio del día
       });
     }
   };
 
-  // Handlers para acciones de menú EMPLOYEE (sin cambios)
+  // Handlers menú EMPLOYEE (MODIFICADO para usar dynamicDays en handleViewEmpMarkings)
   const handleViewEmpMarkings = (empId: string) => {
     closeContextMenu();
     closeAllModals();
     const employee = employeesToDisplay.find((e) => e.id === empId);
     if (!employee) return;
 
+    // Filtrar marcajes mock por employeeId
     const employeeMarkings = mockMarkings
       .filter((m) => m.employeeId === empId)
-      .map((m): Marking => {
-        // Especificar tipo Marking
-        const dayInfo = days.find((d) => d.key === m.dayKey);
-        const dateStr = dayInfo
-          ? `${dayInfo.date}/${currentYear}`
-          : `??/??/${currentYear}`;
+      .map((m): Marking | null => {
+        // Puede ser null si el dayKey no está en los días mostrados
+        // Encontrar el día correspondiente en los días mostrados actualmente
+        const matchingDay = dynamicDays.find((d) => d.key === m.dayKey);
+        if (!matchingDay) return null; // Si el marcaje es de un día no mostrado, ignorarlo
+
+        const dateStr = format(matchingDay.fullDate, "dd/MM/yyyy", {
+          locale: es,
+        }); // Usar la fecha real
+
         return {
           id: m.id ?? `mock-mark-${Math.random()}`,
           employeeId: m.employeeId,
           dayKey: m.dayKey,
           time: formatTime(m.time),
-          type: m.type as
-            | "ENTRADA"
-            | "SALIDA"
-            | "INICIO_DESCANSO"
-            | "FIN_DESCANSO",
+          type: m.type as any,
           icon: m.icon,
           color: m.color,
-          dateStr: dateStr,
+          dateStr: dateStr, // Fecha formateada real
           site: "Sede Desconocida",
           status: "VALID",
           details: "Sin detalles",
@@ -437,17 +461,25 @@ export default function WeekView({ employees }: WeekViewProps) {
           timeFormatted: formatTime(m.time),
         };
       })
+      .filter((m): m is Marking => m !== null) // Filtrar los nulos
       .sort((a, b) => {
-        const dateA = a.dateStr.split("/").reverse().join("-");
-        const dateB = b.dateStr.split("/").reverse().join("-");
-        const dateComparison = dateA.localeCompare(dateB);
+        // Ordenar por fecha real y luego por hora
+        const dateA =
+          dynamicDays.find((d) => d.key === a.dayKey)?.fullDate.getTime() ?? 0;
+        const dateB =
+          dynamicDays.find((d) => d.key === b.dayKey)?.fullDate.getTime() ?? 0;
+        const dateComparison = dateA - dateB;
         if (dateComparison !== 0) return dateComparison;
-        return Number(a.time ?? 0) - Number(b.time ?? 0);
+        // Convertir tiempo HH:mm a número para comparar
+        const timeA = Number(a.time.replace(":", "."));
+        const timeB = Number(b.time.replace(":", "."));
+        return timeA - timeB;
       });
 
     setMarkingsModalData({ employee, markings: employeeMarkings });
     setIsMarkingsModalOpen(true);
   };
+  // Resto de handlers de Employee sin cambios
   const handleCopyEmpLeave = (empId: string) => {
     console.log("Copiar Licencias Emp:", empId);
     showToast("Licencias y permisos copiados", "success");
@@ -479,15 +511,14 @@ export default function WeekView({ employees }: WeekViewProps) {
     setIsPasteConfirmOpen(false);
     setPasteEmployeeId(null);
   };
-  // --- Fin Handlers Existentes ---
 
-  // --- (NUEVO) Handlers específicos para acciones de barra WORKED ---
+  // Handlers menú WORKED (MODIFICADO para usar fullDate si está disponible)
   const handleViewDetailsWorked = useCallback(() => {
     if (
       menuState.type !== "worked" ||
       !menuState.data?.id ||
       !menuState.data.employeeId ||
-      !menuState.data.dayKey
+      !menuState.data.dayKey // Mantenemos dayKey por compatibilidad mock
     ) {
       console.error(
         "WeekView: Datos insuficientes en menuState para ver detalles:",
@@ -500,7 +531,8 @@ export default function WeekView({ employees }: WeekViewProps) {
 
     const { id, type, employeeId, dayKey } = menuState.data;
     const employee = employeesToDisplay.find((e) => e.id === employeeId);
-    const dayInfo = days.find((d) => d.key === dayKey);
+    // Encontrar el día por dayKey en los días mostrados actualmente
+    const dayInfo = dynamicDays.find((d) => d.key === dayKey);
 
     if (!employee || !dayInfo) {
       console.error(
@@ -518,12 +550,12 @@ export default function WeekView({ employees }: WeekViewProps) {
       endTime = 0,
       label = undefined;
 
-    // Buscar en mocks (reemplazar con lógica real)
     if (type === "schedule") {
       itemData = mockSchedules.find(
         (s) => s.id === id && s.employeeId === employeeId && s.dayKey === dayKey
       );
     } else {
+      // 'regular' o 'overtime' vienen de workedTimes
       itemData = mockWorkedTimes.find(
         (w) => w.id === id && w.employeeId === employeeId && w.dayKey === dayKey
       );
@@ -546,11 +578,14 @@ export default function WeekView({ employees }: WeekViewProps) {
     const hours = Math.floor(durationHours);
     const minutes = Math.round((durationHours - hours) * 60);
 
-    const dateString = `${dayInfo.key} ${dayInfo.date}/${currentYear}`; // Ej: 'lun 28/04/2024'
+    // Usar la fecha completa para el string
+    const dateString = format(dayInfo.fullDate, "eee dd/MM/yyyy", {
+      locale: es,
+    });
 
     const detailPayload: DetailModalData = {
       id: id,
-      type: type,
+      type: type, // Puede ser 'schedule', 'regular', 'overtime'
       employeeName: employee.name,
       employeeDept: employee.department || "N/A",
       date: dateString,
@@ -558,14 +593,21 @@ export default function WeekView({ employees }: WeekViewProps) {
       endTime: formatTime(endTime),
       duration: `${hours}h ${minutes}m`,
       label: label,
-      status: type === "schedule" ? "Planificado" : "Registrado",
+      status: type === "schedule" ? "Planificado" : "Registrado", // Simplificado
       details: `Mock: Detalles para ${type} ID ${id} en WeekView.`,
     };
 
     setDetailModalData(detailPayload);
     setIsDetailModalOpen(true);
     closeContextMenu();
-  }, [menuState, employeesToDisplay, formatTime, showToast, closeContextMenu]);
+  }, [
+    menuState,
+    employeesToDisplay,
+    dynamicDays,
+    formatTime,
+    showToast,
+    closeContextMenu,
+  ]);
 
   const handleCopyWorked = useCallback(() => {
     if (menuState.type !== "worked" || !menuState.data?.id) {
@@ -604,15 +646,16 @@ export default function WeekView({ employees }: WeekViewProps) {
 
     const { id, type, employeeId, dayKey } = menuState.data;
     const employee = employeesToDisplay.find((e) => e.id === employeeId);
-    const dayInfo = days.find((d) => d.key === dayKey);
+    const dayInfo = dynamicDays.find((d) => d.key === dayKey);
 
     let itemName = `el elemento ${type} (ID: ${id})`;
     if (employee && dayInfo) {
-      itemName = `el ${type} de ${employee.name} (${dayInfo.key} ${dayInfo.date})`;
+      const dateStr = format(dayInfo.fullDate, "dd/MM", { locale: es });
+      itemName = `el ${type} de ${employee.name} (${dayInfo.key} ${dateStr})`;
       if (type === "schedule") {
         const schedule = mockSchedules.find((s) => s.id === id);
         if (schedule?.label) {
-          itemName = `el horario "${schedule.label}" de ${employee.name} (${dayInfo.key} ${dayInfo.date})`;
+          itemName = `el horario "${schedule.label}" de ${employee.name} (${dayInfo.key} ${dateStr})`;
         }
       }
     }
@@ -620,37 +663,37 @@ export default function WeekView({ employees }: WeekViewProps) {
     setDeleteConfirmData({ id: id, type: type, itemName: itemName });
     setIsDeleteConfirmOpen(true);
     closeContextMenu();
-  }, [menuState, employeesToDisplay, closeContextMenu, showToast]);
+  }, [menuState, employeesToDisplay, dynamicDays, closeContextMenu, showToast]);
 
-  // (NUEVO) Handler para confirmar la eliminación desde el modal
   const handleConfirmDelete = useCallback(() => {
     if (!deleteConfirmData) return;
     const { id, type, itemName } = deleteConfirmData;
-
     console.log(`WeekView: BORRADO CONFIRMADO para ${type} ID: ${id}`);
-    // --- AQUÍ LÓGICA REAL DE BORRADO (API, actualizar estado global, etc.) ---
-
-    closeAllModals(); // Cierra el modal de confirmación
+    closeAllModals();
     showToast(
       `${
         itemName.charAt(0).toUpperCase() + itemName.slice(1)
       } eliminado (simulado).`,
       "success"
     );
-    // Quizás refetch o update local de datos
   }, [deleteConfirmData, showToast, closeAllModals]);
 
-  // (NUEVO) Handler para cancelar desde el modal de eliminación
   const handleCancelDelete = useCallback(() => {
-    closeAllModals(); // Simplemente cierra todos los modales
+    closeAllModals();
   }, [closeAllModals]);
-  // --- Fin Handlers Acciones Barra WORKED ---
 
   // Check inicial (sin cambios)
   if (totalNumberOfEmployees === 0) {
     return (
       <div className="flex justify-center items-center h-60 text-muted-foreground">
         No hay datos de empleados para mostrar.
+      </div>
+    );
+  }
+  if (totalNumberOfDays === 0) {
+    return (
+      <div className="flex justify-center items-center h-60 text-muted-foreground">
+        Seleccione un rango de fechas para mostrar.
       </div>
     );
   }
@@ -675,7 +718,6 @@ export default function WeekView({ employees }: WeekViewProps) {
   return (
     <TooltipProvider>
       <style>{stripeCSS}</style>
-      {/* Contenedor principal y onClick (sin cambios) */}
       <div
         className="h-[calc(100vh-100px)] w-full overflow-auto border border-border rounded-md bg-card text-card-foreground relative"
         onClick={(e) => {
@@ -686,9 +728,8 @@ export default function WeekView({ employees }: WeekViewProps) {
             closeContextMenu();
         }}
       >
-        {/* Layout Flex (sin cambios) */}
         <div className="flex min-w-max">
-          {/* Columna Izquierda Fija (Empleado y Día - SIN CAMBIOS INTERNOS) */}
+          {/* Columna Izquierda Fija (MODIFICADO para usar dynamicDays) */}
           <div
             className="sticky left-0 z-30 shrink-0 border-r border-border shadow-sm flex flex-col bg-white"
             style={{
@@ -696,7 +737,7 @@ export default function WeekView({ employees }: WeekViewProps) {
               height: `${totalTimelineHeight}px`,
             }}
           >
-            {/* Header Izquierdo */}
+            {/* Header Izquierdo (sin cambios) */}
             <div
               className="border-b border-border flex items-center sticky top-0 z-10 bg-white"
               style={{ height: `${HEADER_HEIGHT}px` }}
@@ -714,11 +755,11 @@ export default function WeekView({ employees }: WeekViewProps) {
                 Día
               </div>
             </div>
-            {/* Contenido Izquierdo (Nombres Empleados y Días) */}
+            {/* Contenido Izquierdo (MODIFICADO para usar dynamicDays) */}
             <div className="relative flex-1">
               {employeesToDisplay.map((employee, employeeIndex) => (
                 <React.Fragment key={employee.id}>
-                  {/* Celda Nombre Empleado con Tooltip */}
+                  {/* Celda Nombre Empleado (sin cambios internos) */}
                   <div
                     onContextMenu={(e) =>
                       handleContextMenu(e, "employee", {
@@ -727,9 +768,11 @@ export default function WeekView({ employees }: WeekViewProps) {
                     }
                     className="absolute border-b border-r border-border bg-white hover:bg-gray-50 cursor-context-menu group"
                     style={{
-                      top: `${employeeIndex * days.length * ROW_HEIGHT}px`,
+                      top: `${
+                        employeeIndex * totalNumberOfDays * ROW_HEIGHT
+                      }px`, // Usa totalNumberOfDays
                       left: 0,
-                      height: `${days.length * ROW_HEIGHT}px`,
+                      height: `${totalNumberOfDays * ROW_HEIGHT}px`, // Usa totalNumberOfDays
                       width: `${EMPLOYEE_COL_WIDTH}px`,
                     }}
                   >
@@ -750,6 +793,7 @@ export default function WeekView({ employees }: WeekViewProps) {
                         className="bg-slate-800 text-white p-3 rounded-md shadow-lg text-xs border border-slate-700 w-60"
                         sideOffset={5}
                       >
+                        {/* Tooltip content sin cambios */}
                         <div className="font-bold text-sm mb-2">
                           {employee.name}
                         </div>
@@ -797,31 +841,40 @@ export default function WeekView({ employees }: WeekViewProps) {
                       </TooltipContent>
                     </Tooltip>
                   </div>
-                  {/* Celdas Días */}
+                  {/* Celdas Días (MODIFICADO para iterar sobre dynamicDays) */}
                   <div
                     className="absolute flex flex-col bg-white"
                     style={{
                       left: `${EMPLOYEE_COL_WIDTH}px`,
-                      top: `${employeeIndex * days.length * ROW_HEIGHT}px`,
+                      top: `${
+                        employeeIndex * totalNumberOfDays * ROW_HEIGHT
+                      }px`, // Usa totalNumberOfDays
                       width: `${DAY_COL_WIDTH}px`,
                     }}
                   >
-                    {days.map((day) => (
-                      <div
-                        key={`${employee.id}-${day.key}-day`}
-                        className="border-b border-border p-2 flex items-center justify-center text-xs hover:bg-gray-50"
-                        style={{ height: `${ROW_HEIGHT}px` }}
-                      >
-                        <span className="font-bold mr-1">{day.key}</span>
-                        <span>{day.date}</span>
-                      </div>
-                    ))}
+                    {dynamicDays.map(
+                      (
+                        day // Itera sobre dynamicDays
+                      ) => (
+                        <div
+                          key={`${employee.id}-${day.key}-${day.date}`} // Key única
+                          className="border-b border-border p-2 flex items-center justify-center text-xs hover:bg-gray-50"
+                          style={{ height: `${ROW_HEIGHT}px` }}
+                        >
+                          <span className="font-bold mr-1 capitalize">
+                            {day.key}
+                          </span>{" "}
+                          {/* Muestra key (lun, mar...) */}
+                          <span>{day.date}</span> {/* Muestra fecha (28/04) */}
+                        </div>
+                      )
+                    )}
                   </div>
                 </React.Fragment>
               ))}
             </div>
           </div>
-          {/* Área Timeline Scrollable */}
+          {/* Área Timeline Scrollable (MODIFICADO para usar dynamicDays) */}
           <div className="flex-1 min-w-0 relative">
             <div
               className="relative"
@@ -830,7 +883,7 @@ export default function WeekView({ employees }: WeekViewProps) {
                 height: `${totalTimelineHeight}px`,
               }}
             >
-              {/* Header Timeline (Horas - SIN CAMBIOS INTERNOS) */}
+              {/* Header Timeline (sin cambios) */}
               <div
                 className="sticky top-0 z-20 flex border-b border-border bg-blue-100"
                 style={{
@@ -848,17 +901,19 @@ export default function WeekView({ employees }: WeekViewProps) {
                   </div>
                 ))}
               </div>
-              {/* Grid Background y Contenido Timeline */}
+              {/* Grid Background y Contenido Timeline (MODIFICADO para usar dynamicDays) */}
               <div className="absolute top-0 left-0 w-full h-full">
-                {/* Filas Background y Líneas Horarias/Minutos (SIN CAMBIOS INTERNOS) */}
+                {/* Filas Background (MODIFICADO) */}
                 {Array.from({ length: totalNumberOfRows }).map(
+                  // Usa totalNumberOfRows actualizado
                   (_, localRowIndex) => {
+                    // Calcular employeeIndex y dayIndex basado en dynamicDays.length
                     const employeeIndex = Math.floor(
-                      localRowIndex / days.length
+                      localRowIndex / totalNumberOfDays
                     );
-                    const dayIndex = localRowIndex % days.length;
+                    const dayIndex = localRowIndex % totalNumberOfDays;
                     const employee = employeesToDisplay[employeeIndex];
-                    const day = days[dayIndex];
+                    const day = dynamicDays[dayIndex]; // Obtener día de dynamicDays
                     if (!employee || !day) return null;
                     const top = localRowIndex * ROW_HEIGHT + HEADER_HEIGHT;
                     return (
@@ -867,7 +922,8 @@ export default function WeekView({ employees }: WeekViewProps) {
                         onContextMenu={(e) =>
                           handleContextMenu(e, "grid", {
                             employeeId: employee.id,
-                            dayKey: day.key,
+                            dayKey: day.key, // Pasar key (lun, mar...)
+                            fullDate: day.fullDate, // Pasar fecha completa
                           })
                         }
                         className="absolute border-b border-gray-200 hover:bg-blue-50/30 cursor-context-menu"
@@ -879,7 +935,7 @@ export default function WeekView({ employees }: WeekViewProps) {
                           zIndex: 2,
                         }}
                       >
-                        {/* Líneas verticales */}
+                        {/* Líneas verticales (sin cambios internos) */}
                         <div className="absolute inset-0 pointer-events-none z-0">
                           {hoursToDisplay.map((hour) => (
                             <React.Fragment
@@ -911,87 +967,151 @@ export default function WeekView({ employees }: WeekViewProps) {
                     );
                   }
                 )}
-                {/* Capa para renderizar Barras y Marcajes (CON onContextMenu MODIFICADO) */}
+                {/* Capa para renderizar Barras y Marcajes (MODIFICADO) */}
                 <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none">
-                  {employeesToDisplay.map((employee) =>
-                    days.map((day) => {
-                      const rowIndex = getRowIndex(employee.id, day.key);
-                      if (rowIndex === -1) return null;
-                      const actualSchedule = mockSchedules.find(
-                        (s) =>
-                          s.employeeId === employee.id && s.dayKey === day.key
-                      );
-                      const actualWorked = mockWorkedTimes.find(
-                        (w) =>
-                          w.employeeId === employee.id && w.dayKey === day.key
-                      );
-                      const actualMarkings = mockMarkings.filter(
-                        (m) =>
-                          m.employeeId === employee.id && m.dayKey === day.key
-                      );
-                      const barLayer: React.ReactNode[] = [];
-                      const markingLayer: React.ReactNode[] = [];
-                      const topOffset = rowIndex * ROW_HEIGHT + HEADER_HEIGHT;
+                  {employeesToDisplay.map(
+                    (
+                      employee,
+                      employeeIndex // Necesitamos employeeIndex
+                    ) =>
+                      dynamicDays.map((day, dayIndex) => {
+                        // Iterar sobre dynamicDays, necesitamos dayIndex
+                        // Calcular rowIndex basado en los índices de los maps
+                        const localRowIndex =
+                          employeeIndex * totalNumberOfDays + dayIndex;
+                        const dayKey = day.key; // Usar la key del día actual (lun, mar...)
 
-                      // Renderizar Barra Horario (Schedule)
-                      if (actualSchedule) {
-                        const left = actualSchedule.startTime * HOUR_WIDTH;
-                        const width =
-                          (actualSchedule.endTime - actualSchedule.startTime) *
-                          HOUR_WIDTH;
-                        const verticalPosition = topOffset + ROW_HEIGHT * 0.5;
-                        const barHeight = ROW_HEIGHT * 0.25;
-                        if (width > 0.1)
-                          barLayer.push(
-                            <div
-                              key={`sched-${employee.id}-${day.key}`}
-                              // (MODIFICADO) Context Menu para BARRA HORARIO
-                              onContextMenu={(e) =>
-                                handleContextMenu(e, "worked", {
-                                  scheduleId: actualSchedule.id,
-                                  type: "schedule",
-                                  employeeId: employee.id, // Pasar employeeId
-                                  dayKey: day.key, // Pasar dayKey
-                                })
-                              }
-                              className={cn(
-                                "absolute rounded-md overflow-hidden bg-green-100 border border-green-300 pointer-events-auto cursor-context-menu"
-                              )}
-                              style={{
-                                top: `${verticalPosition}px`,
-                                left: `${left}px`,
-                                width: `${width}px`,
-                                height: `${barHeight}px`,
-                                zIndex: 5,
-                              }}
-                            >
-                              <span
+                        // Filtrar mocks usando dayKey
+                        const actualSchedule = mockSchedules.find(
+                          (s) =>
+                            s.employeeId === employee.id && s.dayKey === dayKey
+                        );
+                        const actualWorked = mockWorkedTimes.find(
+                          (w) =>
+                            w.employeeId === employee.id && w.dayKey === dayKey
+                        );
+                        const actualMarkings = mockMarkings.filter(
+                          (m) =>
+                            m.employeeId === employee.id && m.dayKey === dayKey
+                        );
+
+                        const barLayer: React.ReactNode[] = [];
+                        const markingLayer: React.ReactNode[] = [];
+                        const topOffset =
+                          localRowIndex * ROW_HEIGHT + HEADER_HEIGHT; // Calcular topOffset
+
+                        // Renderizar Barra Horario (Schedule) - Lógica interna sin cambios, pero pasa dayKey
+                        if (actualSchedule) {
+                          const left = actualSchedule.startTime * HOUR_WIDTH;
+                          const width =
+                            (actualSchedule.endTime -
+                              actualSchedule.startTime) *
+                            HOUR_WIDTH;
+                          const verticalPosition = topOffset + ROW_HEIGHT * 0.5;
+                          const barHeight = ROW_HEIGHT * 0.25;
+                          if (width > 0.1)
+                            barLayer.push(
+                              <div
+                                key={`sched-${employee.id}-${dayKey}`}
+                                onContextMenu={(e) =>
+                                  handleContextMenu(e, "worked", {
+                                    scheduleId: actualSchedule.id,
+                                    type: "schedule",
+                                    employeeId: employee.id,
+                                    dayKey: dayKey, // Pasar dayKey
+                                    // Podríamos pasar fullDate si fuera necesario: fullDate: day.fullDate
+                                  })
+                                }
                                 className={cn(
-                                  "absolute bottom-[-2px] left-1.5 text-[10px] font-medium pointer-events-none text-green-800"
+                                  "absolute rounded-md overflow-hidden bg-green-100 border border-green-300 pointer-events-auto cursor-context-menu"
                                 )}
+                                style={{
+                                  top: `${verticalPosition}px`,
+                                  left: `${left}px`,
+                                  width: `${width}px`,
+                                  height: `${barHeight}px`,
+                                  zIndex: 5,
+                                }}
                               >
-                                {actualSchedule.label}
-                              </span>
-                            </div>
-                          );
-                        // Renderizar Ausencias (barras rojas) - Lógica existente SIN CAMBIOS
-                        const absenceVerticalPosition =
-                          topOffset + ROW_HEIGHT * 0.18;
-                        const absenceHeight = ROW_HEIGHT * 0.25;
-                        if (actualWorked) {
-                          if (
-                            actualWorked.startTime > actualSchedule.startTime
-                          ) {
-                            const aE = Math.min(
-                              actualWorked.startTime,
-                              actualSchedule.endTime
+                                <span
+                                  className={cn(
+                                    "absolute bottom-[-2px] left-1.5 text-[10px] font-medium pointer-events-none text-green-800"
+                                  )}
+                                >
+                                  {actualSchedule.label}
+                                </span>
+                              </div>
                             );
+                          // Renderizar Ausencias - Lógica interna sin cambios
+                          const absenceVerticalPosition =
+                            topOffset + ROW_HEIGHT * 0.18;
+                          const absenceHeight = ROW_HEIGHT * 0.25;
+                          if (actualWorked) {
+                            if (
+                              actualWorked.startTime > actualSchedule.startTime
+                            ) {
+                              const aE = Math.min(
+                                actualWorked.startTime,
+                                actualSchedule.endTime
+                              );
+                              const aW =
+                                (aE - actualSchedule.startTime) * HOUR_WIDTH;
+                              if (aW > 0.1)
+                                barLayer.push(
+                                  <div
+                                    key={`abs-start-${employee.id}-${dayKey}`}
+                                    className={cn(
+                                      "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
+                                    )}
+                                    style={{
+                                      top: `${absenceVerticalPosition}px`,
+                                      left: `${
+                                        actualSchedule.startTime * HOUR_WIDTH
+                                      }px`,
+                                      width: `${aW}px`,
+                                      height: `${absenceHeight}px`,
+                                      zIndex: 16,
+                                    }}
+                                  >
+                                    <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
+                                  </div>
+                                );
+                            }
+                            if (actualWorked.endTime < actualSchedule.endTime) {
+                              const aS = Math.max(
+                                actualWorked.endTime,
+                                actualSchedule.startTime
+                              );
+                              const aW =
+                                (actualSchedule.endTime - aS) * HOUR_WIDTH;
+                              if (aW > 0.1)
+                                barLayer.push(
+                                  <div
+                                    key={`abs-end-${employee.id}-${dayKey}`}
+                                    className={cn(
+                                      "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
+                                    )}
+                                    style={{
+                                      top: `${absenceVerticalPosition}px`,
+                                      left: `${aS * HOUR_WIDTH}px`,
+                                      width: `${aW}px`,
+                                      height: `${absenceHeight}px`,
+                                      zIndex: 16,
+                                    }}
+                                  >
+                                    <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
+                                  </div>
+                                );
+                            }
+                          } else {
                             const aW =
-                              (aE - actualSchedule.startTime) * HOUR_WIDTH;
+                              (actualSchedule.endTime -
+                                actualSchedule.startTime) *
+                              HOUR_WIDTH;
                             if (aW > 0.1)
                               barLayer.push(
                                 <div
-                                  key={`abs-start-${employee.id}-${day.key}`}
+                                  key={`abs-full-${employee.id}-${dayKey}`}
                                   className={cn(
                                     "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
                                   )}
@@ -1009,187 +1129,131 @@ export default function WeekView({ employees }: WeekViewProps) {
                                 </div>
                               );
                           }
-                          if (actualWorked.endTime < actualSchedule.endTime) {
-                            const aS = Math.max(
-                              actualWorked.endTime,
-                              actualSchedule.startTime
-                            );
-                            const aW =
-                              (actualSchedule.endTime - aS) * HOUR_WIDTH;
-                            if (aW > 0.1)
-                              barLayer.push(
-                                <div
-                                  key={`abs-end-${employee.id}-${day.key}`}
-                                  className={cn(
-                                    "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
-                                  )}
-                                  style={{
-                                    top: `${absenceVerticalPosition}px`,
-                                    left: `${aS * HOUR_WIDTH}px`,
-                                    width: `${aW}px`,
-                                    height: `${absenceHeight}px`,
-                                    zIndex: 16,
-                                  }}
-                                >
-                                  <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
-                                </div>
-                              );
-                          }
-                        } else {
-                          const aW =
-                            (actualSchedule.endTime -
-                              actualSchedule.startTime) *
-                            HOUR_WIDTH;
-                          if (aW > 0.1)
+                        }
+
+                        // Renderizar Barras Tiempo Trabajado - Lógica interna sin cambios, pero pasa dayKey
+                        if (actualWorked) {
+                          const workedStart = actualWorked.startTime;
+                          const workedEnd = actualWorked.endTime;
+                          const scheduleStart =
+                            actualSchedule?.startTime ?? -Infinity;
+                          const scheduleEnd =
+                            actualSchedule?.endTime ?? Infinity;
+                          const regularStart = Math.max(
+                            workedStart,
+                            scheduleStart
+                          );
+                          const regularEnd = Math.min(workedEnd, scheduleEnd);
+                          const regularWidth =
+                            regularEnd > regularStart
+                              ? (regularEnd - regularStart) * HOUR_WIDTH
+                              : 0;
+                          const overtimeStart = Math.max(
+                            workedStart,
+                            scheduleEnd
+                          );
+                          const overtimeEnd = workedEnd;
+                          const overtimeWidth =
+                            overtimeEnd > overtimeStart
+                              ? (overtimeEnd - overtimeStart) * HOUR_WIDTH
+                              : 0;
+                          const verticalPosition =
+                            topOffset + ROW_HEIGHT * 0.18;
+                          const barHeight = ROW_HEIGHT * 0.25;
+
+                          if (regularWidth > 0.1)
                             barLayer.push(
                               <div
-                                key={`abs-full-${employee.id}-${day.key}`}
+                                key={`workR-${employee.id}-${dayKey}`}
+                                onContextMenu={(e) =>
+                                  handleContextMenu(e, "worked", {
+                                    workedId: actualWorked.id,
+                                    type: "regular",
+                                    employeeId: employee.id,
+                                    dayKey: dayKey, // Pasar dayKey
+                                  })
+                                }
                                 className={cn(
-                                  "absolute bg-red-200 rounded-sm overflow-hidden pointer-events-none"
+                                  "absolute bg-green-500 rounded-sm pointer-events-auto cursor-context-menu"
                                 )}
                                 style={{
-                                  top: `${absenceVerticalPosition}px`,
-                                  left: `${
-                                    actualSchedule.startTime * HOUR_WIDTH
-                                  }px`,
-                                  width: `${aW}px`,
-                                  height: `${absenceHeight}px`,
-                                  zIndex: 16,
+                                  top: `${verticalPosition}px`,
+                                  left: `${regularStart * HOUR_WIDTH}px`,
+                                  width: `${regularWidth}px`,
+                                  height: `${barHeight}px`,
+                                  zIndex: 15,
                                 }}
-                              >
-                                <div className="absolute inset-0 bg-stripes-pattern opacity-70 pointer-events-none"></div>
-                              </div>
+                              />
+                            );
+                          if (overtimeWidth > 0.1)
+                            barLayer.push(
+                              <div
+                                key={`workOT-${employee.id}-${dayKey}`}
+                                onContextMenu={(e) =>
+                                  handleContextMenu(e, "worked", {
+                                    workedId: actualWorked.id,
+                                    type: "overtime",
+                                    employeeId: employee.id,
+                                    dayKey: dayKey, // Pasar dayKey
+                                  })
+                                }
+                                className={cn(
+                                  "absolute bg-yellow-400 rounded-sm pointer-events-auto cursor-context-menu"
+                                )}
+                                style={{
+                                  top: `${verticalPosition}px`,
+                                  left: `${overtimeStart * HOUR_WIDTH}px`,
+                                  width: `${overtimeWidth}px`,
+                                  height: `${barHeight}px`,
+                                  zIndex: 14,
+                                }}
+                              />
                             );
                         }
-                      }
 
-                      // Renderizar Barras Tiempo Trabajado (Regular/Overtime)
-                      if (actualWorked) {
-                        const workedStart = actualWorked.startTime;
-                        const workedEnd = actualWorked.endTime;
-                        const scheduleStart =
-                          actualSchedule?.startTime ?? -Infinity;
-                        const scheduleEnd = actualSchedule?.endTime ?? Infinity;
-                        const regularStart = Math.max(
-                          workedStart,
-                          scheduleStart
-                        );
-                        const regularEnd = Math.min(workedEnd, scheduleEnd);
-                        const regularWidth =
-                          regularEnd > regularStart
-                            ? (regularEnd - regularStart) * HOUR_WIDTH
-                            : 0;
-                        const overtimeStart = Math.max(
-                          workedStart,
-                          scheduleEnd
-                        );
-                        const overtimeEnd = workedEnd;
-                        const overtimeWidth =
-                          overtimeEnd > overtimeStart
-                            ? (overtimeEnd - overtimeStart) * HOUR_WIDTH
-                            : 0;
-                        const verticalPosition = topOffset + ROW_HEIGHT * 0.18;
-                        const barHeight = ROW_HEIGHT * 0.25;
-
-                        if (regularWidth > 0.1)
-                          barLayer.push(
+                        // Renderizar Marcajes (pines) - Lógica interna sin cambios
+                        actualMarkings.forEach((mark, index) => {
+                          const pinLeft = mark.time * HOUR_WIDTH;
+                          const IconComponent = mark.icon || MapPin;
+                          const pinTop =
+                            topOffset + ROW_HEIGHT - ROW_HEIGHT * 0.15;
+                          markingLayer.push(
                             <div
-                              key={`workR-${employee.id}-${day.key}`}
-                              // (MODIFICADO) Context Menu para BARRA REGULAR
-                              onContextMenu={(e) =>
-                                handleContextMenu(e, "worked", {
-                                  workedId: actualWorked.id,
-                                  type: "regular",
-                                  employeeId: employee.id,
-                                  dayKey: day.key,
-                                })
-                              }
+                              key={`mark-${employee.id}-${dayKey}-${index}`}
                               className={cn(
-                                "absolute bg-green-500 rounded-sm pointer-events-auto cursor-context-menu"
+                                "absolute z-30 flex items-center justify-center pointer-events-auto"
                               )}
                               style={{
-                                top: `${verticalPosition}px`,
-                                left: `${regularStart * HOUR_WIDTH}px`,
-                                width: `${regularWidth}px`,
-                                height: `${barHeight}px`,
-                                zIndex: 15,
+                                top: `${pinTop}px`,
+                                left: `${pinLeft}px`,
+                                transform: "translate(-50%, -50%)",
                               }}
-                            />
+                              title={`${mark.type} @ ${formatTime(mark.time)}`}
+                            >
+                              <IconComponent
+                                className={cn("w-3.5 h-3.5", mark.color)}
+                              />
+                            </div>
                           );
-                        if (overtimeWidth > 0.1)
-                          barLayer.push(
-                            <div
-                              key={`workOT-${employee.id}-${day.key}`}
-                              // (MODIFICADO) Context Menu para BARRA OVERTIME
-                              onContextMenu={(e) =>
-                                handleContextMenu(e, "worked", {
-                                  workedId: actualWorked.id,
-                                  type: "overtime",
-                                  employeeId: employee.id,
-                                  dayKey: day.key,
-                                })
-                              }
-                              className={cn(
-                                "absolute bg-yellow-400 rounded-sm pointer-events-auto cursor-context-menu"
-                              )}
-                              style={{
-                                top: `${verticalPosition}px`,
-                                left: `${overtimeStart * HOUR_WIDTH}px`,
-                                width: `${overtimeWidth}px`,
-                                height: `${barHeight}px`,
-                                zIndex: 14,
-                              }}
-                            />
-                          );
-                      }
+                        });
 
-                      // Renderizar Marcajes (pines) - Lógica existente SIN CAMBIOS
-                      actualMarkings.forEach((mark, index) => {
-                        const pinLeft = mark.time * HOUR_WIDTH;
-                        const IconComponent = mark.icon || MapPin;
-                        const pinTop =
-                          topOffset + ROW_HEIGHT - ROW_HEIGHT * 0.15;
-                        markingLayer.push(
-                          <div
-                            key={`mark-${employee.id}-${day.key}-${index}`}
-                            className={cn(
-                              "absolute z-30 flex items-center justify-center pointer-events-auto"
-                            )}
-                            style={{
-                              top: `${pinTop}px`,
-                              left: `${pinLeft}px`,
-                              transform: "translate(-50%, -50%)",
-                            }}
-                            title={`${mark.type} @ ${formatTime(mark.time)}`}
+                        return (
+                          <React.Fragment
+                            key={`cell-content-${employee.id}-${dayKey}`}
                           >
-                            <IconComponent
-                              className={cn("w-3.5 h-3.5", mark.color)}
-                            />
-                          </div>
+                            {barLayer}
+                            {markingLayer}
+                          </React.Fragment>
                         );
-                      });
-
-                      return (
-                        <React.Fragment
-                          key={`cell-content-${employee.id}-${day.key}`}
-                        >
-                          {barLayer}
-                          {markingLayer}
-                        </React.Fragment>
-                      );
-                    })
+                      })
                   )}
-                </div>{" "}
-                {/* Fin Capa Barras y Marcajes */}
-              </div>{" "}
-              {/* Fin Grid Background y Contenido */}
-            </div>{" "}
-            {/* Fin Contenedor Timeline Scrollable */}
-          </div>{" "}
-          {/* Fin Área Timeline Scrollable */}
-        </div>{" "}
-        {/* Fin Layout Flex */}
-        {/* --- Modales (TODOS CON SU CONTENIDO COMPLETO) --- */}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* --- Modales y Menú Contextual (sin cambios internos aquí) --- */}
         <Modal
           isOpen={isFormModalOpen}
           onClose={closeAllModals}
@@ -1296,7 +1360,6 @@ export default function WeekView({ employees }: WeekViewProps) {
             </div>
           </div>
         </Modal>
-        {/* --- (NUEVO) Renderizado de Modales para Barra --- */}
         <WorkDetailModal
           isOpen={isDetailModalOpen}
           onClose={closeAllModals}
@@ -1313,23 +1376,19 @@ export default function WeekView({ employees }: WeekViewProps) {
           }
           itemName={deleteConfirmData?.itemName || "este elemento"}
         />
-        {/* --- Fin Nuevos Modales --- */}
-        {/* Menú Contextual */}
         <CustomContextMenu
           isOpen={menuState.isOpen}
           position={menuState.position}
           onClose={closeContextMenu}
           className="custom-context-menu"
         >
-          {/* --- (MODIFICADO) Conectar Nuevos Handlers para 'worked' --- */}
           {menuState.type === "worked" && menuState.data && (
             <WorkedBarContextMenuContent
-              onViewDetails={handleViewDetailsWorked} // <-- Usar nuevo handler
-              onCopy={handleCopyWorked} // <-- Usar nuevo handler
-              onDelete={handleDeleteWorked} // <-- Usar nuevo handler
+              onViewDetails={handleViewDetailsWorked}
+              onCopy={handleCopyWorked}
+              onDelete={handleDeleteWorked}
             />
           )}
-          {/* Mantener sin cambios para 'grid' y 'employee' */}
           {menuState.type === "grid" && menuState.data && (
             <GridCellContextMenuContent
               formattedDateTime={
@@ -1354,7 +1413,7 @@ export default function WeekView({ employees }: WeekViewProps) {
             />
           )}
         </CustomContextMenu>
-        {/* Renderizado de Toasts (ya existente y completo) */}
+        {/* Renderizado de Toasts (sin cambios) */}
         <div className="fixed bottom-0 right-0 p-4 space-y-2 z-[100]">
           {toasts.map((toast) => (
             <div
@@ -1382,8 +1441,7 @@ export default function WeekView({ employees }: WeekViewProps) {
             </div>
           ))}
         </div>
-      </div>{" "}
-      {/* Fin Contenedor Principal */}
+      </div>
     </TooltipProvider>
   );
 }

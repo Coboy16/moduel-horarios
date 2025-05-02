@@ -120,7 +120,7 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
                         <SelectValue placeholder="Seleccionar tipo" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="bg-white">
                       {markingTypes.map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
@@ -146,7 +146,7 @@ export default function EditMarkingModal({}: EditMarkingModalProps) {
                         <SelectValue placeholder="Seleccionar empleado" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="bg-white">
                       {employees.map((employee) => (
                         <SelectItem key={employee.id} value={employee.id}>
                           {employee.name}

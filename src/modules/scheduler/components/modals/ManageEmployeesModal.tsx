@@ -107,7 +107,7 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Departamento" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white">
                 <SelectItem value="all">Todos los departamentos</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept}>
@@ -121,7 +121,7 @@ export default function ManageEmployeesModal({}: ManageEmployeesModalProps) {
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Posición" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white">
                 <SelectItem value="all">Todas las posiciones</SelectItem>
                 {positions.map((pos) => (
                   <SelectItem key={pos} value={pos}>

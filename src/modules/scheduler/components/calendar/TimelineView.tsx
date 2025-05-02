@@ -2,13 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, {
-  useState,
-  useCallback,
-  useRef,
-  forwardRef,
-  useEffect, // Importado para posible depuración
-} from "react";
+import React, { useState, useCallback, useRef, forwardRef } from "react";
 import { cn } from "../../lib/utils";
 import {
   MapPin,
